@@ -73,3 +73,11 @@ Thumbs.db
 *.temp
 *.swp
 /generated/prisma
+
+# Local PostgreSQL
+tools/pgsql/
+
+# Environment
+.env
+.env.*
+!.env.example

@@ -56,3 +56,52 @@ export class ConflictError extends AppError {
     Object.setPrototypeOf(this, ConflictError.prototype);
   }
 }
+
+export class InvalidPhoneError extends AppError {
+  constructor(message: string = 'Invalid phone number') {
+    super(400, message, 'INVALID_PHONE');
+    Object.setPrototypeOf(this, InvalidPhoneError.prototype);
+  }
+}
+
+export class InvalidOtpError extends AppError {
+  constructor(message: string = 'Invalid OTP') {
+    super(400, message, 'INVALID_OTP');
+    Object.setPrototypeOf(this, InvalidOtpError.prototype);
+  }
+}
+
+export class OtpExpiredError extends AppError {
+  constructor(message: string = 'OTP expired') {
+    super(401, message, 'OTP_EXPIRED');
+    Object.setPrototypeOf(this, OtpExpiredError.prototype);
+  }
+}
+
+export class OtpAlreadyUsedError extends AppError {
+  constructor(message: string = 'OTP already used') {
+    super(409, message, 'OTP_ALREADY_USED');
+    Object.setPrototypeOf(this, OtpAlreadyUsedError.prototype);
+  }
+}
+
+export class OtpBlockedError extends AppError {
+  constructor(message: string = 'OTP blocked') {
+    super(423, message, 'OTP_BLOCKED');
+    Object.setPrototypeOf(this, OtpBlockedError.prototype);
+  }
+}
+
+export class OtpCooldownError extends AppError {
+  constructor(message: string = 'Please wait before requesting a new OTP') {
+    super(429, message, 'OTP_COOLDOWN');
+    Object.setPrototypeOf(this, OtpCooldownError.prototype);
+  }
+}
+
+export class OtpRateLimitedError extends AppError {
+  constructor(message: string = 'Too many OTP requests') {
+    super(429, message, 'OTP_RATE_LIMITED');
+    Object.setPrototypeOf(this, OtpRateLimitedError.prototype);
+  }
+}

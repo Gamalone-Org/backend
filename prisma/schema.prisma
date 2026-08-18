@@ -11,3 +11,425 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  ACTIF
+  INACTIF
+  SUSPENDU
+  EN_ATTENTE_VALIDATION
+}
+
+enum UserRole {
+  ACHETEUR
+  ARTISAN
+  ADMIN
+}
+
+enum PhoneVerificationStatus {
+  NON_VERIFIE
+  EN_ATTENTE_VERIFICATION
+  VERIFIE
+  BLOQUE
+}
+
+enum ArtisanSubscription {
+  GRATUIT
+  STANDARD
+  PREMIUM
+}
+
+enum AdminAccessLevel {
+  SUPPORT
+  MODERATEUR
+  SUPER_ADMIN
+}
+
+enum BuyerType {
+  PARTICULIER
+  PROFESSIONNEL
+  COLLECTIONNEUR
+}
+
+enum OtpPurpose {
+  SIGNUP
+  LOGIN
+  PHONE_VERIFICATION
+}
+
+enum OtpStatus {
+  EN_ATTENTE
+  UTILISE
+  EXPIRE
+  BLOQUE
+}
+
+enum KycStatus {
+  BROUILLON
+  SOUMIS
+  EN_ATTENTE
+  VALIDE
+  REJETE
+  CORRECTION_REQUISE
+  EXPIRE
+}
+
+enum KycReviewAction {
+  APPROUVER
+  REJETER
+  DEMANDE_CORRECTION
+}
+
+enum ArtworkStatus {
+  BROUILLON
+  EN_ATTENTE_VALIDATION
+  PUBLIEE
+  VENDUE
+  RETIREE
+}
+
+enum OrderStatus {
+  EN_ATTENTE
+  CONFIRMEE
+  EN_PREPARATION
+  EXPEDIEE
+  LIVREE
+  ANNULEE
+  REMBOURSEE
+}
+
+enum OrderType {
+  STANDARD
+  SUR_MESURE
+  ENCHERE
+}
+
+enum PaymentMethod {
+  CARTE_BANCAIRE
+  MOBILE_MONEY
+  VIREMENT
+  ESPECES
+}
+
+enum PaymentStatus {
+  EN_ATTENTE
+  EN_COURS
+  REUSSI
+  ECHOUE
+  REMBOURSE
+}
+
+enum DeliveryStatus {
+  EN_ATTENTE
+  PREPAREE
+  EXPEDIEE
+  EN_TRANSIT
+  LIVREE
+  ECHEC
+}
+
+// ---------------------------------------------------------------------------
+// Utilisateur (base) + profils métier (remplace l'héritage UML)
+// ---------------------------------------------------------------------------
+
+model User {
+  id                          String                  @id @default(uuid()) @db.Uuid
+  email                       String?                 @unique
+  motDePasse                  String?
+  telephone                   String                  @unique
+  statut                      UserStatus              @default(EN_ATTENTE_VALIDATION)
+  role                        UserRole                @default(ACHETEUR)
+  telephoneVerificationStatus PhoneVerificationStatus @default(NON_VERIFIE)
+  telephoneVerifiedAt         DateTime?
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+
+  artisanProfile ArtisanProfile?
+  adminProfile   AdminProfile?
+  buyerProfile   BuyerProfile?
+  otpCodes       OtpCode[]
+  kycSubmissions Kyc[]
+
+  @@index([telephone])
+  @@map("users")
+}
+
+model ArtisanProfile {
+  id                  String              @id @default(uuid()) @db.Uuid
+  userId              String              @unique @db.Uuid
+  nomAtelier          String
+  specialite          String
+  biographie          String              @db.Text
+  localisation        String
+  anneesExperience    Int
+  estCertifie         Boolean             @default(false)
+  scoreFiabilite      Decimal?            @db.Decimal(5, 2)
+  liensReseauxSociaux Json?               @db.JsonB
+  abonnement          ArtisanSubscription @default(GRATUIT)
+  commission          Decimal             @default(0) @db.Decimal(5, 2)
+  validatedByAdminId  String?             @db.Uuid
+  validatedAt         DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  validatedByAdmin AdminProfile?   @relation("ArtisanKycValidation", fields: [validatedByAdminId], references: [id], onDelete: SetNull)
+  oeuvres          Oeuvre[]
+  lignesCommande   LigneCommande[]
+
+  @@index([validatedByAdminId])
+  @@map("artisan_profiles")
+}
+
+model AdminProfile {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @unique @db.Uuid
+  niveauAcces AdminAccessLevel @default(SUPPORT)
+  departement String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  validatedArtisans ArtisanProfile[] @relation("ArtisanKycValidation")
+  publishedOeuvres  Oeuvre[]         @relation("OeuvrePublication")
+  reviewedKycs      Kyc[]            @relation("AdminKycReview")
+
+  @@map("admin_profiles")
+}
+
+model BuyerProfile {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @unique @db.Uuid
+  adresseLivraison String
+  devise           String    @default("XOF")
+  langue           String    @default("fr")
+  typeClient       BuyerType @default(PARTICULIER)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commandes Commande[]
+
+  @@map("buyer_profiles")
+}
+
+model OtpCode {
+  id           String     @id @default(uuid()) @db.Uuid
+  userId       String?    @db.Uuid
+  phone        String
+  codeHash     String
+  purpose      OtpPurpose
+  status       OtpStatus  @default(EN_ATTENTE)
+  expiresAt    DateTime
+  createdAt    DateTime   @default(now())
+  usedAt       DateTime?
+  attemptCount Int        @default(0)
+  maxAttempts  Int        @default(5)
+  lastSentAt   DateTime?
+  updatedAt    DateTime   @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([phone, purpose, status])
+  @@index([userId])
+  @@map("otp_codes")
+}
+
+model Kyc {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @db.Uuid
+  status            KycStatus @default(BROUILLON)
+  submittedAt       DateTime?
+  reviewedAt        DateTime?
+  reviewedByAdminId String?   @db.Uuid
+  rejectionReason   String?
+  resubmissionOfId  String?   @db.Uuid
+
+  identityData     Json?
+  professionData   Json?
+  additionalInfo   Json?
+  addressData      Json?
+  identityDocument Json?
+  supportingDocs   Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  reviewedByAdmin AdminProfile? @relation("AdminKycReview", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+
+  previousSubmission Kyc?  @relation("KycResubmission", fields: [resubmissionOfId], references: [id], onDelete: SetNull)
+  resubmissions      Kyc[] @relation("KycResubmission")
+
+  @@index([userId, status])
+  @@index([reviewedByAdminId])
+  @@map("kyc_records")
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue
+// ---------------------------------------------------------------------------
+
+model Categorie {
+  id          String   @id @default(uuid()) @db.Uuid
+  nom         String   @unique
+  description String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  oeuvres Oeuvre[]
+
+  @@map("categories")
+}
+
+model Oeuvre {
+  id                 String        @id @default(uuid()) @db.Uuid
+  titre              String
+  description        String        @db.Text
+  technique          String
+  materiaux          String
+  dimensions         String
+  poids              Float?
+  anneeCreation      Int
+  prixXOF            Decimal       @db.Decimal(12, 0)
+  statut             ArtworkStatus @default(BROUILLON)
+  artisanId          String        @db.Uuid
+  categorieId        String        @db.Uuid
+  publishedByAdminId String?       @db.Uuid
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  artisan          ArtisanProfile  @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+  categorie        Categorie       @relation(fields: [categorieId], references: [id], onDelete: Restrict)
+  publishedByAdmin AdminProfile?   @relation("OeuvrePublication", fields: [publishedByAdminId], references: [id], onDelete: SetNull)
+  medias           Media[]
+  certificat       Certificat?
+  lignesCommande   LigneCommande[]
+
+  @@index([artisanId])
+  @@index([categorieId])
+  @@index([statut])
+  @@map("oeuvres")
+}
+
+model Media {
+  id        String   @id @default(uuid()) @db.Uuid
+  url       String
+  publicId  String
+  mimeType  String
+  size      Int
+  width     Int?
+  height    Int?
+  oeuvreId  String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  oeuvre Oeuvre @relation(fields: [oeuvreId], references: [id], onDelete: Cascade)
+
+  @@index([oeuvreId])
+  @@map("media")
+}
+
+model Certificat {
+  id           String   @id @default(uuid()) @db.Uuid
+  codeQR       String   @unique
+  dateEmission DateTime @default(now())
+  hashOeuvre   String
+  estValide    Boolean  @default(true)
+  oeuvreId     String   @unique @db.Uuid
+
+  oeuvre Oeuvre @relation(fields: [oeuvreId], references: [id], onDelete: Cascade)
+
+  @@map("certificats")
+}
+
+// ---------------------------------------------------------------------------
+// Commandes
+// ---------------------------------------------------------------------------
+
+model Commande {
+  id             String      @id @default(uuid()) @db.Uuid
+  dateCreation   DateTime    @default(now())
+  statut         OrderStatus @default(EN_ATTENTE)
+  montantTotal   Decimal     @db.Decimal(12, 0)
+  commission     Decimal     @default(0) @db.Decimal(12, 0)
+  typeCommande   OrderType   @default(STANDARD)
+  fraisLivraison Decimal     @default(0) @db.Decimal(12, 0)
+  acheteurId     String      @db.Uuid
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  acheteur       BuyerProfile    @relation(fields: [acheteurId], references: [id], onDelete: Restrict)
+  lignesCommande LigneCommande[]
+  paiement       Paiement?
+  livraison      Livraison?
+  avis           Avis?
+
+  @@index([acheteurId])
+  @@index([statut])
+  @@map("commandes")
+}
+
+model LigneCommande {
+  id           String  @id @default(uuid()) @db.Uuid
+  commandeId   String  @db.Uuid
+  oeuvreId     String  @db.Uuid
+  artisanId    String  @db.Uuid // Snapshot du vendeur au moment de la commande; doit rester cohérent avec Oeuvre.artisanId à la création.
+  prixUnitaire Decimal @db.Decimal(12, 0)
+  quantite     Int     @default(1)
+
+  commande Commande       @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  oeuvre   Oeuvre         @relation(fields: [oeuvreId], references: [id], onDelete: Restrict)
+  artisan  ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+
+  @@index([commandeId])
+  @@index([oeuvreId])
+  @@index([artisanId])
+  @@map("ligne_commandes")
+}
+
+model Paiement {
+  id             String        @id @default(uuid()) @db.Uuid
+  montant        Decimal       @db.Decimal(12, 0)
+  methode        PaymentMethod
+  statut         PaymentStatus @default(EN_ATTENTE)
+  date           DateTime      @default(now())
+  estEnsequestre Boolean       @default(false)
+  commandeId     String        @unique @db.Uuid
+
+  commande Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+
+  @@map("paiements")
+}
+
+model Livraison {
+  id           String         @id @default(uuid()) @db.Uuid
+  transporteur String
+  numeroSuivi  String?
+  statut       DeliveryStatus @default(EN_ATTENTE)
+  adresseDest  String
+  frais        Decimal        @default(0) @db.Decimal(12, 0)
+  commandeId   String         @unique @db.Uuid
+
+  commande Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+
+  @@map("livraisons")
+}
+
+model Avis {
+  id          String   @id @default(uuid()) @db.Uuid
+  note        Int
+  commentaire String   @db.Text
+  dateAvis    DateTime @default(now())
+  estVerifie  Boolean  @default(false)
+  commandeId  String   @unique @db.Uuid
+
+  commande Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+
+  // Contrainte PostgreSQL métier à ajouter dans la migration SQL : note >= 1 AND note <= 5.
+  @@map("avis")
+}
