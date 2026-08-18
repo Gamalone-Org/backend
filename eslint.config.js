@@ -17,6 +17,7 @@ export default [
       '!.env.example',
       'prisma/**',
       'tests/**',
+      'tools/pgsql/**',
       'vitest.config.ts',
       'eslint.config.js',
     ],
