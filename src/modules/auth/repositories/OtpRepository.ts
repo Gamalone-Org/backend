@@ -1,5 +1,5 @@
-import type { OtpPurpose, OtpStatus } from '../../../../generated/prisma/client';
-import { PrismaClient } from '../../../../generated/prisma/client';
+import type { OtpPurpose, OtpStatus } from '../../../../generated/prisma/client.js';
+import { PrismaClient } from '../../../../generated/prisma/client.js';
 
 export type OtpRecord = {
   id: string;
