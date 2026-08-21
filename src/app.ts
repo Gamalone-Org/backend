@@ -4,6 +4,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import pinoHttp from 'pino-http';
 import swaggerUi from 'swagger-ui-express';
+import swaggerUiDist from 'swagger-ui-dist';
 import { env } from './config/env.js';
 import { getCorsAllowlist, isAllowedOrigin } from './config/cors.js';
 import { swaggerDocument, swaggerOptions } from './config/swagger.js';
@@ -12,6 +13,7 @@ import { notFoundMiddleware } from './common/middleware/index.js';
 import routes from './routes/index.js';
 
 const app = express();
+const swaggerUiPath = swaggerUiDist.getAbsoluteFSPath();
 
 // Trust proxy
 app.set('trust proxy', 1);
@@ -79,6 +81,7 @@ app.get('/openapi.json', (_req, res) => {
   res.status(200).json(swaggerDocument);
 });
 
+app.use('/docs', express.static(swaggerUiPath, { index: false }));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerOptions));
 
 // Routes
