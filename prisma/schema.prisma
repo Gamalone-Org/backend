@@ -83,6 +83,17 @@ enum KycReviewAction {
   DEMANDE_CORRECTION
 }
 
+enum KycDocumentType {
+  CNI_RECTO
+  CNI_VERSO
+  PASSEPORT
+  TITRE_SEJOUR
+  JUSTIFICATIF_DOMICILE
+  PHOTO_SELFIE
+  EXTRAIT_KBIS
+  DOCUMENT_COMPLEMENTAIRE
+}
+
 enum ArtworkStatus {
   BROUILLON
   EN_ATTENTE_VALIDATION
@@ -194,8 +205,9 @@ model AdminProfile {
 
   user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   validatedArtisans ArtisanProfile[] @relation("ArtisanKycValidation")
-  publishedOeuvres  Oeuvre[]         @relation("OeuvrePublication")
-  reviewedKycs      Kyc[]            @relation("AdminKycReview")
+  publishedOeuvres  Oeuvre[]           @relation("OeuvrePublication")
+  reviewedKycs      Kyc[]              @relation("AdminKycReview")
+  reviewHistories   KycReviewHistory[] @relation("AdminKycReviewHistory")
 
   @@map("admin_profiles")
 }
@@ -262,12 +274,53 @@ model Kyc {
 
   reviewedByAdmin AdminProfile? @relation("AdminKycReview", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
 
-  previousSubmission Kyc?  @relation("KycResubmission", fields: [resubmissionOfId], references: [id], onDelete: SetNull)
-  resubmissions      Kyc[] @relation("KycResubmission")
+  previousSubmission Kyc?          @relation("KycResubmission", fields: [resubmissionOfId], references: [id], onDelete: SetNull)
+  resubmissions      Kyc[]         @relation("KycResubmission")
+  documents          KycDocument[]
+  reviewHistory      KycReviewHistory[]
 
   @@index([userId, status])
   @@index([reviewedByAdminId])
   @@map("kyc_records")
+}
+
+model KycReviewHistory {
+  id        String          @id @default(uuid()) @db.Uuid
+  kycId     String          @db.Uuid
+  adminId   String          @db.Uuid
+  action    KycReviewAction
+  reason    String?         @db.Text
+  createdAt DateTime        @default(now())
+
+  kyc   Kyc          @relation(fields: [kycId], references: [id], onDelete: Cascade)
+  admin AdminProfile @relation("AdminKycReviewHistory", fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([kycId])
+  @@index([adminId])
+  @@map("kyc_review_history")
+}
+
+model KycDocument {
+  id           String          @id @default(uuid()) @db.Uuid
+  kycId        String          @db.Uuid
+  documentType KycDocumentType
+
+  // --- Référence Cloudinary (jamais le binaire, uniquement les métadonnées) ---
+  secureUrl    String
+  publicId     String
+  resourceType String
+  format       String?
+  bytes        Int
+  assetId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  kyc Kyc @relation(fields: [kycId], references: [id], onDelete: Cascade)
+
+  @@index([kycId])
+  @@index([kycId, documentType])
+  @@map("kyc_documents")
 }
 
 // ---------------------------------------------------------------------------

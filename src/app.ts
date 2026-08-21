@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import pinoHttp from 'pino-http';
 import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env.js';
+import { getCorsAllowlist, isAllowedOrigin } from './config/cors.js';
 import { swaggerDocument, swaggerOptions } from './config/swagger.js';
 import { errorHandler } from './common/errors/index.js';
 import { notFoundMiddleware } from './common/middleware/index.js';
@@ -19,10 +20,22 @@ app.set('trust proxy', 1);
 app.use(helmet());
 
 // CORS configuration
-const allowedOrigins = new Set(env.CORS_ORIGINS);
+const allowedOrigins = new Set(
+  getCorsAllowlist({
+    NODE_ENV: env.NODE_ENV,
+    API_PUBLIC_URL: env.API_PUBLIC_URL,
+    CORS_ORIGINS: env.CORS_ORIGINS,
+  })
+);
 const corsOptions = {
   origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
-    if (!origin || allowedOrigins.has(origin)) {
+    const normalizedOrigin = origin && origin !== 'null' ? origin.replace(/\/+$/, '') : '';
+
+    if (!origin || origin === 'null' || allowedOrigins.has(normalizedOrigin) || isAllowedOrigin(origin, {
+      NODE_ENV: env.NODE_ENV,
+      API_PUBLIC_URL: env.API_PUBLIC_URL,
+      CORS_ORIGINS: env.CORS_ORIGINS,
+    })) {
       callback(null, true);
       return;
     }
@@ -31,7 +44,8 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Authorization'],
 };
 app.use(cors(corsOptions));
 
@@ -46,11 +60,20 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Request logging
-app.use(pinoHttp());
+app.use(
+  pinoHttp({
+    autoLogging: env.NODE_ENV !== 'test',
+    level: env.NODE_ENV === 'test' ? 'silent' : 'info',
+  })
+);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+app.get('/', (_req, res) => {
+  res.redirect('/docs/');
+});
 
 app.get('/openapi.json', (_req, res) => {
   res.status(200).json(swaggerDocument);

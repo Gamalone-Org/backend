@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { AppError } from './AppError.js';
 
 export function errorHandler(
@@ -12,8 +13,16 @@ export function errorHandler(
     return;
   }
 
+  if (error instanceof z.ZodError) {
+    res.status(400).json({
+      success: false,
+      message: error.issues[0]?.message ?? 'Invalid request',
+      code: 'VALIDATION_ERROR',
+    });
+    return;
+  }
+
   if (error instanceof Error) {
-    // Log the error but don't expose internal details
     console.error('Unhandled error:', error.message);
 
     res.status(500).json({

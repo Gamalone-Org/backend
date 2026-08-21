@@ -2,10 +2,11 @@ import { z } from 'zod';
 
 const defaultDatabaseUrl = 'postgresql://postgres:postgres@localhost:5432/gamalone_backend';
 
-const smsProviderSchema = z.enum(['mock', 'twilio', 'messagebird', 'custom']).default('mock');
+const smsProviderSchema = z.enum(['mock', 'twilio', 'messagebird', 'afriksms', 'custom']).default('mock');
+const defaultCorsOrigins = 'http://localhost:5000,http://localhost:3000,http://localhost:5173,http://localhost:4173';
 const corsOriginsSchema = z
   .string()
-  .default('http://localhost:3000,http://localhost:5173,http://localhost:4173')
+  .default(defaultCorsOrigins)
   .transform((value) =>
     value
       .split(',')
@@ -23,13 +24,15 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(5000),
   API_PUBLIC_URL: z.string().url('Invalid API_PUBLIC_URL').default('http://localhost:5000'),
   DATABASE_URL: databaseUrlSchema,
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters').optional(),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  JWT_EXPIRES_IN: z.string().min(1, 'JWT_EXPIRES_IN is required').default('7d'),
   REDIS_URL: z.string().url('Invalid REDIS_URL').optional(),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
   CLOUDINARY_API_SECRET: z.string().optional(),
   CORS_ORIGINS: corsOriginsSchema,
   SMS_PROVIDER: smsProviderSchema,
+  SMS_CLIENT_ID: z.string().optional(),
   SMS_FROM: z.string().optional(),
   SMS_API_KEY: z.string().optional(),
   SMS_API_SECRET: z.string().optional(),
@@ -55,13 +58,15 @@ function parseEnv(): EnvType {
     PORT: process.env['PORT'],
     API_PUBLIC_URL: process.env['API_PUBLIC_URL'] ?? 'http://localhost:5000',
     DATABASE_URL: process.env['DATABASE_URL'] ?? defaultDatabaseUrl,
-    JWT_SECRET: process.env['JWT_SECRET'],
+    JWT_SECRET: process.env['JWT_SECRET'] ?? '12345678901234567890123456789012',
+    JWT_EXPIRES_IN: process.env['JWT_EXPIRES_IN'] ?? '7d',
     REDIS_URL: process.env['REDIS_URL'],
     CLOUDINARY_CLOUD_NAME: process.env['CLOUDINARY_CLOUD_NAME'],
     CLOUDINARY_API_KEY: process.env['CLOUDINARY_API_KEY'],
     CLOUDINARY_API_SECRET: process.env['CLOUDINARY_API_SECRET'],
-    CORS_ORIGINS: process.env['CORS_ORIGINS'] ?? 'http://localhost:3000,http://localhost:5173,http://localhost:4173',
+    CORS_ORIGINS: process.env['CORS_ORIGINS'] ?? defaultCorsOrigins,
     SMS_PROVIDER: process.env['SMS_PROVIDER'],
+    SMS_CLIENT_ID: process.env['SMS_CLIENT_ID'],
     SMS_FROM: process.env['SMS_FROM'],
     SMS_API_KEY: process.env['SMS_API_KEY'],
     SMS_API_SECRET: process.env['SMS_API_SECRET'],
