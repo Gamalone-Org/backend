@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from '../../../generated/prisma/client.js';
+import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import type { AdminKycListQuery, CreateKycDocumentData, SubmitKycInput } from './kyc.types.js';
 
 const activeStatuses = ['BROUILLON', 'SOUMIS', 'EN_ATTENTE', 'VALIDE', 'CORRECTION_REQUISE'] as const;

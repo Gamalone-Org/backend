@@ -5,7 +5,7 @@ vi.hoisted(() => {
   process.env.DATABASE_URL = 'postgresql://user:password@localhost:5432/gamalone_test';
 });
 
-import { OtpPurpose, OtpStatus } from '../../generated/prisma/client';
+import { OtpPurpose, OtpStatus } from '../../src/generated/prisma/client.js';
 import { OtpService } from '../../src/modules/auth/services/OtpService';
 import { PhoneService } from '../../src/modules/auth/services/PhoneService';
 import { InvalidOtpError, OtpCooldownError, OtpExpiredError, OtpResendCooldownError } from '../../src/common/errors/AppError';

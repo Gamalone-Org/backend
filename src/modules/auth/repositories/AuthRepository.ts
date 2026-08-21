@@ -1,4 +1,4 @@
-import type { PrismaClient, UserRole, UserStatus, PhoneVerificationStatus } from '../../../../generated/prisma/client.js';
+import type { PrismaClient, UserRole, UserStatus, PhoneVerificationStatus } from '../../../generated/prisma/client.js';
 
 export class AuthRepository {
   constructor(private readonly prisma: PrismaClient) {}

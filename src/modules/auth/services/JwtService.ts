@@ -1,7 +1,7 @@
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 import { env } from '../../../config/env.js';
 import { UnauthorizedError } from '../../../common/errors/AppError.js';
-import type { UserRole } from '../../../../generated/prisma/client.js';
+import type { UserRole } from '../../../generated/prisma/client.js';
 
 export type JwtUserPayload = {
   userId: string;

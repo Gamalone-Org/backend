@@ -72,7 +72,7 @@ Thumbs.db
 *.tmp
 *.temp
 *.swp
-/generated/prisma
+/src/generated/prisma
 
 # Local PostgreSQL
 tools/pgsql/
