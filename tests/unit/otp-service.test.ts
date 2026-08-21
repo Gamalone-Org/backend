@@ -8,7 +8,7 @@ vi.hoisted(() => {
 import { OtpPurpose, OtpStatus } from '../../generated/prisma/client';
 import { OtpService } from '../../src/modules/auth/services/OtpService';
 import { PhoneService } from '../../src/modules/auth/services/PhoneService';
-import { InvalidOtpError, OtpCooldownError, OtpExpiredError } from '../../src/common/errors/AppError';
+import { InvalidOtpError, OtpCooldownError, OtpExpiredError, OtpResendCooldownError } from '../../src/common/errors/AppError';
 
 describe('OtpService', () => {
   const phone = '+22890123456';
@@ -22,6 +22,7 @@ describe('OtpService', () => {
     markUsed: vi.fn(),
     markExpired: vi.fn(),
     markBlocked: vi.fn(),
+    countRecentByPhone: vi.fn().mockResolvedValue(0),
   });
 
   let repo: ReturnType<typeof createRepository>;
@@ -113,6 +114,48 @@ describe('OtpService', () => {
     expect(repo.incrementAttempts).toHaveBeenCalledWith('1');
   });
 
+  it('creates a resend flow that invalidates the previous OTP and returns a fresh code', async () => {
+    repo.findLatestByPhoneAndPurpose.mockResolvedValue({
+      id: 'old-1',
+      phone,
+      purpose: OtpPurpose.LOGIN,
+      status: OtpStatus.EN_ATTENTE,
+      codeHash: 'old-hash',
+      expiresAt: new Date(Date.now() + 60000),
+      attemptCount: 0,
+      maxAttempts: 5,
+      createdAt: new Date(Date.now() - 50000),
+      updatedAt: new Date(Date.now() - 50000),
+      usedAt: null,
+      lastSentAt: new Date(Date.now() - 50000),
+      userId: null,
+    });
+    repo.countRecentByPhone.mockResolvedValue(0);
+    repo.invalidateActiveByPhoneAndPurpose.mockResolvedValue(1);
+    repo.create.mockImplementation(async (data) => ({
+      id: 'new-1',
+      phone: data.phone,
+      purpose: data.purpose,
+      status: OtpStatus.EN_ATTENTE,
+      codeHash: data.codeHash,
+      expiresAt: data.expiresAt,
+      maxAttempts: data.maxAttempts,
+      attemptCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      usedAt: null,
+      lastSentAt: data.lastSentAt,
+      userId: data.userId ?? null,
+    }));
+
+    const result = await service.resendOtp({ phone, purpose: OtpPurpose.LOGIN, ip: '203.0.113.10' });
+
+    expect(repo.invalidateActiveByPhoneAndPurpose).toHaveBeenCalledWith(phone, OtpPurpose.LOGIN);
+    expect(result.code).toMatch(/^\d{6}$/);
+    expect(result.expiresAt).toBeInstanceOf(Date);
+    expect(repo.create).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects a resend before the cooldown ends', async () => {
     repo.findLatestByPhoneAndPurpose.mockResolvedValue({
       id: '1',
@@ -130,6 +173,6 @@ describe('OtpService', () => {
       userId: null,
     });
 
-    await expect(service.createOtp({ phone, purpose: OtpPurpose.LOGIN })).rejects.toThrow(OtpCooldownError);
+    await expect(service.resendOtp({ phone, purpose: OtpPurpose.LOGIN, ip: '203.0.113.10' })).rejects.toThrow(OtpResendCooldownError);
   });
 });

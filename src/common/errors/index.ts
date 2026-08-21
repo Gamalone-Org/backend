@@ -11,6 +11,7 @@ export {
   OtpAlreadyUsedError,
   OtpBlockedError,
   OtpCooldownError,
+  OtpResendCooldownError,
   OtpRateLimitedError,
 } from './AppError.js';
 export { errorHandler } from './errorHandler.js';

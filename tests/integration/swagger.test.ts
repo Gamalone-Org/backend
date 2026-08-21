@@ -14,6 +14,13 @@ describe('Swagger / OpenAPI', () => {
     expect(response.body.info.title).toBe('GAMALONE API');
   });
 
+  it('GET / redirects automatically to /docs/', async () => {
+    const response = await request(app).get('/');
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe('/docs/');
+  });
+
   it('GET /docs serves Swagger UI', async () => {
     const response = await request(app).get('/docs');
 
@@ -35,5 +42,16 @@ describe('Swagger / OpenAPI', () => {
       success: true,
       message: 'GAMALONE API is running',
     });
+  });
+
+  it('allows same-origin Swagger UI requests from localhost:5000', async () => {
+    const response = await request(app)
+      .options('/api/v1/auth/otp/send')
+      .set('Origin', 'http://localhost:5000')
+      .set('Access-Control-Request-Method', 'POST')
+      .set('Access-Control-Request-Headers', 'content-type');
+
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost:5000');
+    expect(response.text).not.toContain('Not allowed by CORS');
   });
 });

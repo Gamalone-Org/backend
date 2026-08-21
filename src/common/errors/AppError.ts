@@ -2,14 +2,20 @@
  * Application Error Class
  * Centralized error handling
  */
+export type AppErrorDetails = Record<string, unknown>;
+
 export class AppError extends Error {
+  public readonly details?: AppErrorDetails;
+
   constructor(
     public statusCode: number,
     public message: string,
-    public code: string = 'INTERNAL_SERVER_ERROR'
+    public code: string = 'INTERNAL_SERVER_ERROR',
+    details?: AppErrorDetails
   ) {
     super(message);
     this.name = 'AppError';
+    this.details = details;
     Object.setPrototypeOf(this, AppError.prototype);
   }
 
@@ -19,6 +25,25 @@ export class AppError extends Error {
       message: this.message,
       code: this.code,
     };
+  }
+}
+
+export class SmsProviderError extends AppError {
+  constructor(
+    message: string,
+    code: string,
+    statusCode: number,
+    details?: AppErrorDetails
+  ) {
+    super(statusCode, message, code, details);
+    Object.setPrototypeOf(this, SmsProviderError.prototype);
+  }
+}
+
+export class SmsSenderInvalidError extends SmsProviderError {
+  constructor(details?: AppErrorDetails) {
+    super("Le service SMS a refusé l'expéditeur configuré.", 'SMS_SENDER_INVALID', 502, details);
+    Object.setPrototypeOf(this, SmsSenderInvalidError.prototype);
   }
 }
 
@@ -96,6 +121,13 @@ export class OtpCooldownError extends AppError {
   constructor(message: string = 'Please wait before requesting a new OTP') {
     super(429, message, 'OTP_COOLDOWN');
     Object.setPrototypeOf(this, OtpCooldownError.prototype);
+  }
+}
+
+export class OtpResendCooldownError extends AppError {
+  constructor(message: string = 'Please wait before requesting another OTP.') {
+    super(429, message, 'OTP_RESEND_COOLDOWN');
+    Object.setPrototypeOf(this, OtpResendCooldownError.prototype);
   }
 }
 
