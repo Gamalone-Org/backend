@@ -32,6 +32,18 @@ describe('Swagger / OpenAPI', () => {
     expect(htmlResponse.headers['content-type']).toContain('text/html');
     expect(htmlResponse.text).toContain('GAMALONE API Docs');
     expect(htmlResponse.text).toContain('swagger-ui');
+
+    const cssResponse = await request(app).get('/docs/swagger-ui.css');
+    expect(cssResponse.status).toBe(200);
+    expect(cssResponse.headers['content-type']).toContain('text/css');
+
+    const bundleResponse = await request(app).get('/docs/swagger-ui-bundle.js');
+    expect(bundleResponse.status).toBe(200);
+    expect(bundleResponse.headers['content-type']).toMatch(/javascript/);
+
+    const presetResponse = await request(app).get('/docs/swagger-ui-standalone-preset.js');
+    expect(presetResponse.status).toBe(200);
+    expect(presetResponse.headers['content-type']).toMatch(/javascript/);
   });
 
   it('GET /api/v1/health still returns the expected health response', async () => {
