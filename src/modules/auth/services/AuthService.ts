@@ -1,4 +1,4 @@
-import { UserRole, type User, OtpPurpose } from '../../../../generated/prisma/client.js';
+import { UserRole, type User, OtpPurpose } from '../../../generated/prisma/client.js';
 import { OtpService } from './OtpService.js';
 import { PhoneService } from './PhoneService.js';
 import { JwtService } from './JwtService.js';

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OtpPurpose } from '../../generated/prisma/client';
+import { OtpPurpose } from '../../src/generated/prisma/client.js';
 import { AuthRepository } from '../../src/modules/auth/repositories/AuthRepository';
 import { AuthService } from '../../src/modules/auth/services/AuthService';
 import { JwtService } from '../../src/modules/auth/services/JwtService';

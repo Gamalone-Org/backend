@@ -1,4 +1,4 @@
-import type { KycDocumentType, KycReviewAction, KycStatus } from '../../../generated/prisma/client.js';
+import type { KycDocumentType, KycReviewAction, KycStatus } from '../../generated/prisma/client.js';
 
 export type KycJsonData = Record<string, unknown>;
 

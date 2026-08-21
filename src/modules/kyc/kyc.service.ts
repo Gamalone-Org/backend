@@ -1,4 +1,4 @@
-import type { KycDocumentType, KycStatus } from '../../../generated/prisma/client.js';
+import type { KycDocumentType, KycStatus } from '../../generated/prisma/client.js';
 import {
   ConflictError,
   ForbiddenError,

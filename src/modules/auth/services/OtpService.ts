@@ -1,5 +1,5 @@
 import { randomInt, createHash } from 'node:crypto';
-import type { OtpPurpose } from '../../../../generated/prisma/client.js';
+import type { OtpPurpose } from '../../../generated/prisma/client.js';
 import { env, otpConfig } from '../../../config/index.js';
 import { InvalidOtpError, OtpAlreadyUsedError, OtpBlockedError, OtpCooldownError, OtpExpiredError, OtpRateLimitedError, OtpResendCooldownError } from '../../../common/errors/AppError.js';
 import { PhoneService } from './PhoneService.js';
