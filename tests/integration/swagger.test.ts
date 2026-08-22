@@ -36,14 +36,18 @@ describe('Swagger / OpenAPI', () => {
     const cssResponse = await request(app).get('/docs/swagger-ui.css');
     expect(cssResponse.status).toBe(200);
     expect(cssResponse.headers['content-type']).toContain('text/css');
+    expect(cssResponse.text).toContain('.swagger-ui');
+    expect(cssResponse.text).not.toContain('<!DOCTYPE html>');
 
     const bundleResponse = await request(app).get('/docs/swagger-ui-bundle.js');
     expect(bundleResponse.status).toBe(200);
     expect(bundleResponse.headers['content-type']).toMatch(/javascript/);
+    expect(bundleResponse.text).not.toContain('<!DOCTYPE html>');
 
     const presetResponse = await request(app).get('/docs/swagger-ui-standalone-preset.js');
     expect(presetResponse.status).toBe(200);
     expect(presetResponse.headers['content-type']).toMatch(/javascript/);
+    expect(presetResponse.text).not.toContain('<!DOCTYPE html>');
   });
 
   it('GET /api/v1/health still returns the expected health response', async () => {
