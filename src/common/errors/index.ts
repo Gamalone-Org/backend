@@ -13,5 +13,7 @@ export {
   OtpCooldownError,
   OtpResendCooldownError,
   OtpRateLimitedError,
+  LoginRateLimitedError,
+  PhoneNotVerifiedError,
 } from './AppError.js';
 export { errorHandler } from './errorHandler.js';

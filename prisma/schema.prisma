@@ -151,6 +151,7 @@ enum DeliveryStatus {
 model User {
   id                          String                  @id @default(uuid()) @db.Uuid
   email                       String?                 @unique
+  nom                         String?
   motDePasse                  String?
   telephone                   String                  @unique
   statut                      UserStatus              @default(EN_ATTENTE_VALIDATION)

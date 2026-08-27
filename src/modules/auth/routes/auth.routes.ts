@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../../config/database.js';
 import { AppError, ValidationError } from '../../../common/errors/AppError.js';
@@ -10,6 +11,7 @@ import { PhoneService } from '../services/PhoneService.js';
 import { OtpRepository } from '../repositories/OtpRepository.js';
 import { createSmsService } from '../../../config/sms-factory.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { loginSchema, registerSchema, verifyPhoneSchema } from '../schema.js';
 
 const router = Router();
 const authRepository = new AuthRepository(prisma);
@@ -17,7 +19,13 @@ const otpRepository = new OtpRepository(prisma);
 const phoneService = new PhoneService();
 const otpService = new OtpService(otpRepository, phoneService);
 const jwtService = new JwtService();
-const authService = new AuthService(authRepository, otpService, phoneService, createSmsService(), jwtService);
+const authService = new AuthService(
+  authRepository,
+  otpService,
+  phoneService,
+  createSmsService(),
+  jwtService
+);
 
 const otpSendSchema = z.object({
   phone: z.string().min(1, 'Phone number is required'),
@@ -100,6 +108,68 @@ router.post('/otp/verify', async (req, res, next) => {
   }
 });
 
+router.post('/register', async (req, res, next) => {
+  try {
+    const parsed = registerSchema.parse(req.body);
+    const clientIp = resolveClientIp(req);
+    const result = await authService.register(parsed, clientIp);
+    res.status(201).json({ success: true, ...result });
+  } catch (error) {
+    if (error instanceof AppError) {
+      next(error);
+      return;
+    }
+
+    if (error instanceof z.ZodError) {
+      next(new ValidationError(error.issues[0]?.message ?? 'Invalid request'));
+      return;
+    }
+
+    next(error);
+  }
+});
+
+router.post('/login', async (req, res, next) => {
+  try {
+    const parsed = loginSchema.parse(req.body);
+    const clientIp = resolveClientIp(req);
+    const result = await authService.login(parsed, clientIp);
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    if (error instanceof AppError) {
+      next(error);
+      return;
+    }
+
+    if (error instanceof z.ZodError) {
+      next(new ValidationError(error.issues[0]?.message ?? 'Invalid request'));
+      return;
+    }
+
+    next(error);
+  }
+});
+
+router.post('/verify-phone', async (req, res, next) => {
+  try {
+    const parsed = verifyPhoneSchema.parse(req.body);
+    const result = await authService.verifyPhone(parsed.telephone, parsed.code);
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    if (error instanceof AppError) {
+      next(error);
+      return;
+    }
+
+    if (error instanceof z.ZodError) {
+      next(new ValidationError(error.issues[0]?.message ?? 'Invalid request'));
+      return;
+    }
+
+    next(error);
+  }
+});
+
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
     if (!req.user) {
@@ -117,5 +187,12 @@ router.get('/me', requireAuth, async (req, res, next) => {
     next(error);
   }
 });
+
+function resolveClientIp(req: Request): string {
+  const forwardedFor = Array.isArray(req.headers['x-forwarded-for'])
+    ? req.headers['x-forwarded-for'][0]
+    : req.headers['x-forwarded-for'];
+  return req.ip ?? forwardedFor ?? 'unknown';
+}
 
 export default router;

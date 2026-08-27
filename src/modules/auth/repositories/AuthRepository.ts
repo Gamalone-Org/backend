@@ -1,4 +1,26 @@
-import type { PrismaClient, UserRole, UserStatus, PhoneVerificationStatus } from '../../../generated/prisma/client.js';
+import {
+  Prisma,
+  type PrismaClient,
+  type User,
+  type UserRole,
+  type UserStatus,
+  type PhoneVerificationStatus,
+} from '../../../generated/prisma/client.js';
+
+export type CreateUserWithCredentialsInput = {
+  telephone: string;
+  email?: string | null;
+  nom?: string | null;
+  motDePasseHash: string;
+  role: UserRole;
+  artisanProfile?: {
+    nomAtelier: string;
+    specialite: string;
+    localisation: string;
+    biographie: string;
+    anneesExperience: number;
+  } | null;
+};
 
 export class AuthRepository {
   constructor(private readonly prisma: PrismaClient) {}
@@ -9,10 +31,52 @@ export class AuthRepository {
     });
   }
 
+  async findByEmail(email: string) {
+    return this.prisma.user.findUnique({
+      where: { email },
+    });
+  }
+
   async findById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
     });
+  }
+
+  async createUserWithCredentials(data: CreateUserWithCredentialsInput): Promise<User> {
+    const userData = {
+      telephone: data.telephone,
+      email: data.email ?? null,
+      nom: data.nom ?? null,
+      motDePasse: data.motDePasseHash,
+      role: data.role,
+      statut: 'EN_ATTENTE_VALIDATION',
+      telephoneVerificationStatus: 'NON_VERIFIE',
+      telephoneVerifiedAt: null,
+    } as const;
+
+    if (data.role === 'ARTISAN' && data.artisanProfile) {
+      return this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({ data: userData });
+        await tx.artisanProfile.create({
+          data: {
+            userId: user.id,
+            nomAtelier: data.artisanProfile!.nomAtelier,
+            specialite: data.artisanProfile!.specialite,
+            localisation: data.artisanProfile!.localisation,
+            biographie: data.artisanProfile!.biographie,
+            anneesExperience: data.artisanProfile!.anneesExperience,
+          },
+        });
+        return user;
+      });
+    }
+
+    return this.prisma.user.create({ data: userData });
+  }
+
+  isUniqueConstraintError(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
   }
 
   async createUser(phone: string, role: UserRole = 'ACHETEUR') {
