@@ -29,12 +29,7 @@ export class AppError extends Error {
 }
 
 export class SmsProviderError extends AppError {
-  constructor(
-    message: string,
-    code: string,
-    statusCode: number,
-    details?: AppErrorDetails
-  ) {
+  constructor(message: string, code: string, statusCode: number, details?: AppErrorDetails) {
     super(statusCode, message, code, details);
     Object.setPrototypeOf(this, SmsProviderError.prototype);
   }
@@ -135,5 +130,19 @@ export class OtpRateLimitedError extends AppError {
   constructor(message: string = 'Too many OTP requests') {
     super(429, message, 'OTP_RATE_LIMITED');
     Object.setPrototypeOf(this, OtpRateLimitedError.prototype);
+  }
+}
+
+export class LoginRateLimitedError extends AppError {
+  constructor(message: string = 'Too many login attempts') {
+    super(429, message, 'LOGIN_RATE_LIMITED');
+    Object.setPrototypeOf(this, LoginRateLimitedError.prototype);
+  }
+}
+
+export class PhoneNotVerifiedError extends AppError {
+  constructor(message: string = 'Phone number is not verified yet') {
+    super(403, message, 'PHONE_NOT_VERIFIED');
+    Object.setPrototypeOf(this, PhoneNotVerifiedError.prototype);
   }
 }
