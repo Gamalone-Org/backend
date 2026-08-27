@@ -6,6 +6,7 @@ import {
   UnauthorizedError,
   ValidationError,
 } from '../../src/common/errors/AppError.js';
+import { createKycServiceForTest, moderatorAdminActor, supportAdminActor } from './kyc-test-helpers.js';
 import { KycService } from '../../src/modules/kyc/kyc.service.js';
 
 function createRepository() {
@@ -38,7 +39,8 @@ function createCloudinaryService() {
   };
 }
 
-const adminActor = { id: 'admin-user-1', role: 'ADMIN' };
+const adminActor = moderatorAdminActor;
+const supportActor = supportAdminActor;
 const buyerActor = { id: 'buyer-user-1', role: 'ACHETEUR' };
 
 describe('KycService — Admin Review Workflow', () => {
@@ -50,7 +52,7 @@ describe('KycService — Admin Review Workflow', () => {
     vi.clearAllMocks();
     repository = createRepository();
     cloudinaryService = createCloudinaryService();
-    service = new KycService(repository as any, cloudinaryService as any);
+    service = createKycServiceForTest(repository, cloudinaryService);
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -78,7 +80,7 @@ describe('KycService — Admin Review Workflow', () => {
       };
       repository.findPendingReviews.mockResolvedValue(mockResult);
 
-      const result = await service.listPendingReviews(adminActor, { page: 1, limit: 10 });
+      const result = await service.listPendingReviews(supportActor, { page: 1, limit: 10 });
       expect(result).toEqual(mockResult);
       expect(repository.findPendingReviews).toHaveBeenCalledWith({ page: 1, limit: 10 });
     });
@@ -134,7 +136,7 @@ describe('KycService — Admin Review Workflow', () => {
       const result = await service.getAdminDetailsById('kyc-1', adminActor);
       expect(result.id).toBe('kyc-1');
       expect(result.documents[0].downloadUrl).toBe('https://signed.cloudinary.com/gamalone/kyc/cni-1');
-      expect(cloudinaryService.generateSignedUrl).toHaveBeenCalledWith('gamalone/kyc/cni-1', 'image');
+      expect(cloudinaryService.generateSignedUrl).toHaveBeenCalledWith('gamalone/kyc/cni-1', 'image', expect.any(Number));
     });
   });
 
@@ -158,7 +160,7 @@ describe('KycService — Admin Review Workflow', () => {
       repository.findAdminProfileByUserId.mockResolvedValue(null);
 
       await expect(
-        service.approveKyc('kyc-1', adminActor)
+        service.approveKyc('kyc-1', { ...adminActor, adminProfileId: null })
       ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
@@ -203,7 +205,7 @@ describe('KycService — Admin Review Workflow', () => {
       repository.approveSubmission.mockResolvedValue(approvedKyc);
 
       const result = await service.approveKyc('kyc-1', adminActor);
-      expect(result).toEqual(approvedKyc);
+      expect(result).toEqual(expect.objectContaining({ id: 'kyc-1', status: 'VALIDE' }));
       expect(repository.approveSubmission).toHaveBeenCalledWith('kyc-1', 'admin-profile-1');
     });
 
@@ -219,7 +221,7 @@ describe('KycService — Admin Review Workflow', () => {
       repository.approveSubmission.mockResolvedValue(approvedKyc);
 
       const result = await service.approveKyc('kyc-1', adminActor);
-      expect(result).toEqual(approvedKyc);
+      expect(result).toEqual(expect.objectContaining({ id: 'kyc-1', status: 'VALIDE' }));
       expect(repository.approveSubmission).toHaveBeenCalledWith('kyc-1', 'admin-profile-1');
     });
 
@@ -288,7 +290,7 @@ describe('KycService — Admin Review Workflow', () => {
       repository.rejectSubmission.mockResolvedValue(rejectedKyc);
 
       const result = await service.rejectKyc('kyc-1', adminActor, 'Identity mismatch');
-      expect(result).toEqual(rejectedKyc);
+      expect(result).toEqual(expect.objectContaining({ id: 'kyc-1', status: 'REJETE', rejectionReason: 'Identity mismatch' }));
       expect(repository.rejectSubmission).toHaveBeenCalledWith('kyc-1', 'admin-profile-1', 'Identity mismatch');
     });
 
@@ -352,7 +354,11 @@ describe('KycService — Admin Review Workflow', () => {
         adminActor,
         'ID card is blurry, please provide a clear color scan'
       );
-      expect(result).toEqual(correctionKyc);
+      expect(result).toEqual(expect.objectContaining({
+        id: 'kyc-1',
+        status: 'CORRECTION_REQUISE',
+        rejectionReason: 'ID card is blurry, please provide a clear color scan',
+      }));
       expect(repository.requestCorrection).toHaveBeenCalledWith(
         'kyc-1',
         'admin-profile-1',
@@ -381,10 +387,13 @@ describe('KycService — Admin Review Workflow', () => {
       action: 'APPROUVER',
       reason: null,
       createdAt: new Date(`2026-08-${String(n).padStart(2, '0')}T10:00:00Z`),
+      adminProfileIdSnapshot: 'admin-profile-1',
+      adminDepartementSnapshot: 'Compliance',
+      adminNiveauAccesSnapshot: 'MODERATEUR',
       admin: {
         id: 'admin-profile-1',
         departement: 'Compliance',
-        niveauAcces: 'STANDARD',
+        niveauAcces: 'MODERATEUR',
         user: { email: 'admin@gamalone.com', telephone: '+22891000000' },
       },
     });
@@ -425,30 +434,26 @@ describe('KycService — Admin Review Workflow', () => {
       expect(result[1].createdAt.getTime()).toBeGreaterThan(result[2].createdAt.getTime());
     });
 
-    it('returns admin info (id, departement, niveauAcces, email, telephone) per entry', async () => {
-      repository.findAdminProfileByUserId.mockResolvedValue({ id: 'admin-profile-1' });
+    it('returns immutable admin snapshot info per entry without live credentials', async () => {
       repository.findById.mockResolvedValue(kycRecord);
       repository.findReviewHistoryByKycId.mockResolvedValue([historyEntry(1)]);
 
-      const result = await service.getReviewHistory('kyc-1', adminActor);
+      const result = await service.getReviewHistory('kyc-1', supportActor);
 
-      expect(result[0].admin.id).toBe('admin-profile-1');
+      expect(result[0].admin.profileId).toBe('admin-profile-1');
       expect(result[0].admin.departement).toBe('Compliance');
-      expect(result[0].admin.niveauAcces).toBe('STANDARD');
-      expect(result[0].admin.user.email).toBe('admin@gamalone.com');
-      expect(result[0].admin.user.telephone).toBe('+22891000000');
+      expect(result[0].admin.niveauAcces).toBe('MODERATEUR');
+      expect(JSON.stringify(result[0])).not.toContain('admin@gamalone.com');
     });
 
     it('does not expose password or secret fields', async () => {
-      repository.findAdminProfileByUserId.mockResolvedValue({ id: 'admin-profile-1' });
       repository.findById.mockResolvedValue(kycRecord);
       repository.findReviewHistoryByKycId.mockResolvedValue([historyEntry(1)]);
 
-      const result = await service.getReviewHistory('kyc-1', adminActor);
+      const result = await service.getReviewHistory('kyc-1', supportActor);
 
       expect(result[0]).not.toHaveProperty('password');
-      expect(result[0].admin.user).not.toHaveProperty('motDePasse');
-      expect(result[0].admin.user).not.toHaveProperty('password');
+      expect(JSON.stringify(result[0])).not.toContain('motDePasse');
     });
 
     it('throws UnauthorizedError when actor.id is empty', async () => {
@@ -463,11 +468,9 @@ describe('KycService — Admin Review Workflow', () => {
       ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
-    it('throws ForbiddenError when AdminProfile is not found', async () => {
-      repository.findAdminProfileByUserId.mockResolvedValue(null);
-
+    it('throws ForbiddenError when admin access level is insufficient', async () => {
       await expect(
-        service.getReviewHistory('kyc-1', adminActor)
+        service.getReviewHistory('kyc-1', { id: 'admin-user-1', role: 'ADMIN', adminAccessLevel: null })
       ).rejects.toBeInstanceOf(ForbiddenError);
     });
 

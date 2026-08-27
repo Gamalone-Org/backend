@@ -6,6 +6,7 @@ import {
   ValidationError,
 } from '../../src/common/errors/AppError.js';
 import { detectMimeTypeFromMagicBytes } from '../../src/modules/kyc/middleware/kyc-upload.middleware.js';
+import { createKycServiceForTest } from './kyc-test-helpers.js';
 import { KycService } from '../../src/modules/kyc/kyc.service.js';
 
 const validPdfBuffer = Buffer.from('%PDF-1.5 fake pdf content');
@@ -50,18 +51,22 @@ describe('KYC Document Upload & Magic Bytes Detection', () => {
     const mockCloudinaryService = {
       uploadDocument: mockUploadDocument,
       deleteAsset: mockDeleteAsset,
+      generateSignedUrl: vi.fn().mockReturnValue('https://res.cloudinary.com/signed-url'),
     } as any;
 
     let service: KycService;
 
     beforeEach(() => {
       vi.clearAllMocks();
-      service = new KycService(mockRepo, mockCloudinaryService);
+      service = createKycServiceForTest(mockRepo, mockCloudinaryService);
 
       mockFindById.mockResolvedValue({
         id: 'kyc-1',
         userId: 'user-1',
         status: 'SOUMIS',
+        legalHold: false,
+        anonymizedAt: null,
+        retentionUntil: new Date('2099-01-01T00:00:00.000Z'),
       });
       mockFindUserPhoneVerification.mockResolvedValue({
         telephoneVerificationStatus: 'VERIFIE',
@@ -172,7 +177,7 @@ describe('KYC Document Upload & Magic Bytes Detection', () => {
         format: 'pdf',
         bytes: 1024,
         assetId: 'asset-123',
-      });
+      }, expect.any(Date));
 
       expect(result).toHaveProperty('id', 'doc-1');
       expect(result).toHaveProperty('documentType', 'CNI_RECTO');
@@ -214,12 +219,15 @@ describe('KYC Document Upload & Magic Bytes Detection', () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
-      service = new KycService(mockRepo, mockCloudinaryService);
+      service = createKycServiceForTest(mockRepo, mockCloudinaryService);
 
       mockFindById.mockResolvedValue({
         id: 'kyc-1',
         userId: 'user-1',
         status: 'SOUMIS',
+        legalHold: false,
+        anonymizedAt: null,
+        retentionUntil: new Date('2099-01-01T00:00:00.000Z'),
       });
       mockFindDocumentsByKycId.mockResolvedValue([
         {
@@ -260,7 +268,7 @@ describe('KYC Document Upload & Magic Bytes Detection', () => {
       const docs = await service.getDocuments('kyc-1', { id: 'user-1', role: 'ACHETEUR' });
 
       expect(mockFindDocumentsByKycId).toHaveBeenCalledWith('kyc-1');
-      expect(mockGenerateSignedUrl).toHaveBeenCalledWith('gamalone/kyc/cni-recto', 'raw');
+      expect(mockGenerateSignedUrl).toHaveBeenCalledWith('gamalone/kyc/cni-recto', 'raw', expect.any(Number));
       expect(docs).toHaveLength(1);
       expect(docs[0]).toHaveProperty('downloadUrl', 'https://res.cloudinary.com/signed-url');
     });
@@ -286,12 +294,15 @@ describe('KYC Document Upload & Magic Bytes Detection', () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
-      service = new KycService(mockRepo, mockCloudinaryService);
+      service = createKycServiceForTest(mockRepo, mockCloudinaryService);
 
       mockFindById.mockResolvedValue({
         id: 'kyc-1',
         userId: 'user-1',
         status: 'SOUMIS',
+        legalHold: false,
+        anonymizedAt: null,
+        retentionUntil: new Date('2099-01-01T00:00:00.000Z'),
       });
       mockFindDocumentById.mockResolvedValue({
         id: 'doc-1',

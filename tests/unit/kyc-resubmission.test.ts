@@ -4,8 +4,8 @@ import {
   ForbiddenError,
   NotFoundError,
   UnauthorizedError,
-  ValidationError,
 } from '../../src/common/errors/AppError.js';
+import { createKycServiceForTest } from './kyc-test-helpers.js';
 import { KycService } from '../../src/modules/kyc/kyc.service.js';
 
 const input = {
@@ -37,7 +37,7 @@ describe('KycService.resubmit()', () => {
   // 1. Utilisateur non authentifié
   it('1. rejects when userId is empty', async () => {
     const repository = createRepository();
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
     await expect(service.resubmit('', input)).rejects.toBeInstanceOf(UnauthorizedError);
     expect(repository.createResubmission).not.toHaveBeenCalled();
@@ -47,7 +47,7 @@ describe('KycService.resubmit()', () => {
   it('2. rejects when user is not found in database', async () => {
     const repository = createRepository();
     repository.findUserPhoneVerification.mockResolvedValue(null);
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
     await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(NotFoundError);
     expect(repository.createResubmission).not.toHaveBeenCalled();
@@ -59,7 +59,7 @@ describe('KycService.resubmit()', () => {
     repository.findUserPhoneVerification.mockResolvedValue({
       telephoneVerificationStatus: 'NON_VERIFIE',
     });
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
     await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ForbiddenError);
     expect(repository.createResubmission).not.toHaveBeenCalled();
@@ -72,7 +72,7 @@ describe('KycService.resubmit()', () => {
       telephoneVerificationStatus: 'VERIFIE',
     });
     repository.findLatestByUserId.mockResolvedValue(null);
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
     await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(NotFoundError);
     expect(repository.createResubmission).not.toHaveBeenCalled();
@@ -92,7 +92,7 @@ describe('KycService.resubmit()', () => {
     const newKyc = { id: 'kyc-new', userId: 'user-1', status: 'SOUMIS', resubmissionOfId: 'kyc-old' };
     repository.createResubmission.mockResolvedValue(newKyc);
 
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
     const result = await service.resubmit('user-1', input);
 
     expect(result).toEqual(newKyc);
@@ -113,7 +113,7 @@ describe('KycService.resubmit()', () => {
     });
     repository.createResubmission.mockResolvedValue({ id: 'kyc-new', status: 'SOUMIS' });
 
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
     const spy = vi.spyOn(service, 'validateStatusTransition');
 
     await service.resubmit('user-1', input);
@@ -134,14 +134,14 @@ describe('KycService.resubmit()', () => {
       userId: 'user-1',
       status: 'BROUILLON',
     });
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
     await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ForbiddenError);
     expect(repository.createResubmission).not.toHaveBeenCalled();
   });
 
-  // 7. KYC SOUMIS — SOUMIS -> SOUMIS invalide => ValidationError
-  it('7. rejects when KYC status is SOUMIS and does not create a resubmission', async () => {
+  // 7. KYC SOUMIS — only CORRECTION_REQUISE allowed for resubmit
+  it('7. rejects when KYC status is SOUMIS with ForbiddenError', async () => {
     const repository = createRepository();
     repository.findUserPhoneVerification.mockResolvedValue({
       telephoneVerificationStatus: 'VERIFIE',
@@ -151,14 +151,14 @@ describe('KycService.resubmit()', () => {
       userId: 'user-1',
       status: 'SOUMIS',
     });
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
-    await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ForbiddenError);
     expect(repository.createResubmission).not.toHaveBeenCalled();
   });
 
-  // 8. KYC EN_ATTENTE — EN_ATTENTE -> SOUMIS invalide => ValidationError
-  it('8. rejects when KYC status is EN_ATTENTE and does not create a resubmission', async () => {
+  // 8. KYC EN_ATTENTE — only CORRECTION_REQUISE allowed for resubmit
+  it('8. rejects when KYC status is EN_ATTENTE with ForbiddenError', async () => {
     const repository = createRepository();
     repository.findUserPhoneVerification.mockResolvedValue({
       telephoneVerificationStatus: 'VERIFIE',
@@ -168,14 +168,14 @@ describe('KycService.resubmit()', () => {
       userId: 'user-1',
       status: 'EN_ATTENTE',
     });
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
-    await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ForbiddenError);
     expect(repository.createResubmission).not.toHaveBeenCalled();
   });
 
-  // 9. KYC VALIDE — etat terminal => ValidationError
-  it('9. rejects when KYC status is VALIDE and does not create a resubmission', async () => {
+  // 9. KYC VALIDE — terminal, only CORRECTION_REQUISE allowed for resubmit
+  it('9. rejects when KYC status is VALIDE with ForbiddenError', async () => {
     const repository = createRepository();
     repository.findUserPhoneVerification.mockResolvedValue({
       telephoneVerificationStatus: 'VERIFIE',
@@ -185,14 +185,14 @@ describe('KycService.resubmit()', () => {
       userId: 'user-1',
       status: 'VALIDE',
     });
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
-    await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ForbiddenError);
     expect(repository.createResubmission).not.toHaveBeenCalled();
   });
 
-  // 10. KYC REJETE — etat terminal => ValidationError
-  it('10. rejects when KYC status is REJETE and does not create a resubmission', async () => {
+  // 10. KYC REJETE — terminal, only CORRECTION_REQUISE allowed for resubmit
+  it('10. rejects when KYC status is REJETE with ForbiddenError', async () => {
     const repository = createRepository();
     repository.findUserPhoneVerification.mockResolvedValue({
       telephoneVerificationStatus: 'VERIFIE',
@@ -202,14 +202,14 @@ describe('KycService.resubmit()', () => {
       userId: 'user-1',
       status: 'REJETE',
     });
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
-    await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ForbiddenError);
     expect(repository.createResubmission).not.toHaveBeenCalled();
   });
 
-  // 11. KYC EXPIRE — etat terminal => ValidationError
-  it('11. rejects when KYC status is EXPIRE and does not create a resubmission', async () => {
+  // 11. KYC EXPIRE — terminal, only CORRECTION_REQUISE allowed for resubmit
+  it('11. rejects when KYC status is EXPIRE with ForbiddenError', async () => {
     const repository = createRepository();
     repository.findUserPhoneVerification.mockResolvedValue({
       telephoneVerificationStatus: 'VERIFIE',
@@ -219,9 +219,9 @@ describe('KycService.resubmit()', () => {
       userId: 'user-1',
       status: 'EXPIRE',
     });
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
-    await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(ForbiddenError);
     expect(repository.createResubmission).not.toHaveBeenCalled();
   });
 
@@ -245,7 +245,7 @@ describe('KycService.resubmit()', () => {
       professionData: { profession: 'Artisan' },
     };
 
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
     await service.resubmit('user-abc', specificInput);
 
     expect(repository.createResubmission).toHaveBeenCalledWith(
@@ -273,7 +273,7 @@ describe('KycService.resubmit()', () => {
       userId: 'user-1',
       status,
     });
-    const service = new KycService(repository as any);
+    const service = createKycServiceForTest(repository);
 
     await expect(service.resubmit('user-1', input)).rejects.toBeInstanceOf(AppError);
     expect(repository.createResubmission).not.toHaveBeenCalled();

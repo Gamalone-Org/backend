@@ -59,4 +59,10 @@ export class AuthRepository {
       data: { statut },
     });
   }
+
+  async findAdminProfileByUserId(userId: string) {
+    return this.prisma.adminProfile.findUnique({
+      where: { userId },
+    });
+  }
 }

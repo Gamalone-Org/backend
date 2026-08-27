@@ -1,4 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
+import type { AdminAccessLevel } from '../../../generated/prisma/client.js';
+import { hasMinAdminAccessLevel } from '../../../config/kyc.js';
 import { JwtService } from '../services/JwtService.js';
 import { AuthRepository } from '../repositories/AuthRepository.js';
 import { prisma } from '../../../config/database.js';
@@ -13,6 +15,8 @@ declare global {
         role: string;
         telephone: string;
         statut: string;
+        adminProfileId?: string | null;
+        adminAccessLevel?: AdminAccessLevel | null;
       };
     }
   }
@@ -55,7 +59,24 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
         role: user.role,
         telephone: user.telephone,
         statut: user.statut,
+        adminProfileId: null,
+        adminAccessLevel: null,
       };
+
+      if (user.role === 'ADMIN') {
+        void authRepository.findAdminProfileByUserId(user.id).then((adminProfile) => {
+          if (adminProfile) {
+            req.user = {
+              ...req.user!,
+              adminProfileId: adminProfile.id,
+              adminAccessLevel: adminProfile.niveauAcces,
+            };
+          }
+          next();
+        }).catch((error) => next(error));
+        return;
+      }
+
       next();
     }).catch((error) => next(error));
   } catch (error) {
@@ -72,6 +93,27 @@ export function requireRole(...roles: string[]) {
 
     if (!roles.includes(req.user.role)) {
       next(new ForbiddenError('Insufficient permissions'));
+      return;
+    }
+
+    next();
+  };
+}
+
+export function requireAdminLevel(minimumLevel: AdminAccessLevel) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      next(new UnauthorizedError('Authentication required'));
+      return;
+    }
+
+    if (req.user.role !== 'ADMIN') {
+      next(new ForbiddenError('Admin access required'));
+      return;
+    }
+
+    if (!hasMinAdminAccessLevel(req.user.adminAccessLevel, minimumLevel)) {
+      next(new ForbiddenError('Insufficient admin access level'));
       return;
     }
 

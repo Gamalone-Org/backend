@@ -1,4 +1,4 @@
-import type { KycDocumentType, KycReviewAction, KycStatus } from '../../generated/prisma/client.js';
+import type { AdminAccessLevel, KycDocumentType, KycReviewAction, KycStatus } from '../../generated/prisma/client.js';
 
 export type KycJsonData = Record<string, unknown>;
 
@@ -33,6 +33,8 @@ export type KycRecord = {
 export type KycActor = {
   id: string;
   role: string;
+  adminProfileId?: string | null;
+  adminAccessLevel?: AdminAccessLevel | null;
 };
 
 export type CreateKycDocumentData = {
@@ -76,7 +78,10 @@ export type AdminReviewReasonInput = {
 export type KycReviewHistoryRecord = {
   id: string;
   kycId: string;
-  adminId: string;
+  adminId: string | null;
+  adminProfileIdSnapshot: string | null;
+  adminDepartementSnapshot: string | null;
+  adminNiveauAccesSnapshot: string | null;
   action: KycReviewAction;
   reason: string | null;
   createdAt: Date;

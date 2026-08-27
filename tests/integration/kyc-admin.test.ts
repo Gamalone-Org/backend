@@ -20,6 +20,15 @@ vi.mock('../../src/modules/kyc/kyc.service.js', () => ({
   },
 }));
 
+vi.mock('../../src/shared/services/cloudinary/index.js', () => ({
+  CloudinaryService: class {
+    uploadDocument = vi.fn();
+    deleteAsset = vi.fn();
+    getMetadata = vi.fn();
+    generateSignedUrl = vi.fn();
+  },
+}));
+
 vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
   requireAuth: (req: any, _res: any, next: any) => {
     const authorization = req.headers.authorization;
@@ -255,7 +264,7 @@ describe('Admin KYC Review Routes (Integration)', () => {
     });
 
     it('propagates 403 when AdminProfile is missing', async () => {
-      mockGetReviewHistory.mockRejectedValue(new ForbiddenError('Admin profile not found'));
+      mockGetReviewHistory.mockRejectedValue(new ForbiddenError('Insufficient admin access level'));
       const res = await request(app)
         .get(`/api/v1/admin/kyc/${testKycId}/history`)
         .set('Authorization', 'Bearer token')
