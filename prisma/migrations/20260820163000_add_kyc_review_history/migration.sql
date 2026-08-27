@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE "kyc_review_history" (
     "id" UUID NOT NULL,
     "kycId" UUID NOT NULL,

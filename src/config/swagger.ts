@@ -534,9 +534,71 @@ export const swaggerDocument = {
           '200': { description: 'Correction requested successfully' },
           '400': { description: 'Missing reason or invalid status transition' },
           '401': { description: 'Authentication required' },
-          '403': { description: 'Forbidden: admin access required' },
+          '403': { description: 'Forbidden: admin access required (MODERATEUR minimum)' },
           '404': { description: 'KYC record not found' },
           '409': { description: 'KYC already reviewed or concurrent conflict' },
+        },
+      },
+    },
+    '/api/v1/admin/kyc/{id}/legal-hold': {
+      post: {
+        tags: ['Admin KYC'],
+        summary: 'Set or remove legal hold on KYC',
+        description: 'Sets or removes a legal hold on a KYC record. When legal hold is active, the record cannot be anonymized or purged. Requires SUPER_ADMIN access.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/KycLegalHoldRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Legal hold updated successfully' },
+          '400': { description: 'Invalid request body' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN access required' },
+          '404': { description: 'KYC record not found' },
+        },
+      },
+    },
+    '/api/v1/admin/kyc/{id}/anonymize': {
+      post: {
+        tags: ['Admin KYC'],
+        summary: 'Anonymize KYC record',
+        description: 'Anonymizes all personal data in a KYC record and deletes associated Cloudinary documents. Cannot be performed on records under legal hold. Requires SUPER_ADMIN access.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/KycAnonymizeRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'KYC anonymization processed' },
+          '400': { description: 'Retention period has not expired yet (unless force=true)' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN access required or KYC under legal hold' },
+          '404': { description: 'KYC record not found' },
+          '409': { description: 'Cloudinary deletion failed, anonymization aborted' },
+        },
+      },
+    },
+    '/api/v1/admin/kyc/purge/run': {
+      post: {
+        tags: ['Admin KYC'],
+        summary: 'Run KYC purge job',
+        description: 'Triggers an immediate purge of all KYC records whose retention period has expired and are not under legal hold. Requires SUPER_ADMIN access.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'Purge completed' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN access required' },
         },
       },
     },
@@ -622,10 +684,13 @@ export const swaggerDocument = {
           reviewedAt: { type: 'string', format: 'date-time', nullable: true },
           rejectionReason: { type: 'string', nullable: true },
           resubmissionOfId: { type: 'string', format: 'uuid', nullable: true },
+          retentionUntil: { type: 'string', format: 'date-time', nullable: true },
+          legalHold: { type: 'boolean', example: false },
+          anonymizedAt: { type: 'string', format: 'date-time', nullable: true },
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
         },
-        required: ['id', 'userId', 'status', 'createdAt', 'updatedAt'],
+        required: ['id', 'userId', 'status', 'legalHold', 'createdAt', 'updatedAt'],
       },
       AdminKycReviewReasonRequest: {
         type: 'object',
@@ -633,6 +698,21 @@ export const swaggerDocument = {
           reason: { type: 'string', example: 'Document quality is insufficient, please provide a clear copy.' },
         },
         required: ['reason'],
+      },
+      KycLegalHoldRequest: {
+        type: 'object',
+        properties: {
+          legalHold: { type: 'boolean', example: true },
+        },
+        required: ['legalHold'],
+        additionalProperties: false,
+      },
+      KycAnonymizeRequest: {
+        type: 'object',
+        properties: {
+          force: { type: 'boolean', example: false, description: 'Force anonymization even if retention period has not expired' },
+        },
+        additionalProperties: false,
       },
       ErrorResponse: {
         type: 'object',

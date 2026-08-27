@@ -2,21 +2,32 @@ import type { NextFunction, Request, Response } from 'express';
 import {
   adminKycListQuerySchema,
   adminKycReviewReasonSchema,
+  kycAnonymizeSchema,
   kycDocumentParamsSchema,
   kycIdParamsSchema,
+  kycLegalHoldSchema,
   submitKycSchema,
   uploadKycDocumentSchema,
 } from './kyc.schema.js';
 import { KycService } from './kyc.service.js';
+import type { KycActor } from './kyc.types.js';
 
 export class KycController {
   constructor(private readonly service: KycService) {}
 
+  private getActor(req: Request): KycActor {
+    return {
+      id: req.user?.id ?? '',
+      role: req.user?.role ?? '',
+      adminProfileId: req.user?.adminProfileId ?? null,
+      adminAccessLevel: req.user?.adminAccessLevel ?? null,
+    };
+  }
+
   submit = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const input = submitKycSchema.parse(req.body);
-      const userId = req.user?.id;
-      const kyc = await this.service.submit(userId ?? '', input);
+      const kyc = await this.service.submit(req.user?.id ?? '', input);
       res.status(201).json({ success: true, kyc });
     } catch (error) {
       next(error);
@@ -26,8 +37,7 @@ export class KycController {
   resubmit = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const input = submitKycSchema.parse(req.body);
-      const userId = req.user?.id;
-      const kyc = await this.service.resubmit(userId ?? '', input);
+      const kyc = await this.service.resubmit(req.user?.id ?? '', input);
       res.status(201).json({ success: true, kyc });
     } catch (error) {
       next(error);
@@ -46,11 +56,7 @@ export class KycController {
   getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = kycIdParamsSchema.parse(req.params);
-      const actor = {
-        id: req.user?.id ?? '',
-        role: req.user?.role ?? '',
-      };
-      const kyc = await this.service.getById(id, actor);
+      const kyc = await this.service.getById(id, this.getActor(req));
       res.status(200).json({ success: true, kyc });
     } catch (error) {
       next(error);
@@ -61,8 +67,7 @@ export class KycController {
     try {
       const { id } = kycIdParamsSchema.parse(req.params);
       const { documentType } = uploadKycDocumentSchema.parse(req.body);
-      const actorId = req.user?.id ?? '';
-      const document = await this.service.uploadDocument(id, actorId, documentType, req.file);
+      const document = await this.service.uploadDocument(id, req.user?.id ?? '', documentType, req.file);
       res.status(201).json({ success: true, document });
     } catch (error) {
       next(error);
@@ -72,11 +77,7 @@ export class KycController {
   getDocuments = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = kycIdParamsSchema.parse(req.params);
-      const actor = {
-        id: req.user?.id ?? '',
-        role: req.user?.role ?? '',
-      };
-      const documents = await this.service.getDocuments(id, actor);
+      const documents = await this.service.getDocuments(id, this.getActor(req));
       res.status(200).json({ success: true, documents });
     } catch (error) {
       next(error);
@@ -86,11 +87,7 @@ export class KycController {
   deleteDocument = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id, documentId } = kycDocumentParamsSchema.parse(req.params);
-      const actor = {
-        id: req.user?.id ?? '',
-        role: req.user?.role ?? '',
-      };
-      const result = await this.service.deleteDocument(id, documentId, actor);
+      const result = await this.service.deleteDocument(id, documentId, this.getActor(req));
       res.status(200).json(result);
     } catch (error) {
       next(error);
@@ -100,11 +97,7 @@ export class KycController {
   listPendingReviews = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const query = adminKycListQuerySchema.parse(req.query);
-      const actor = {
-        id: req.user?.id ?? '',
-        role: req.user?.role ?? '',
-      };
-      const result = await this.service.listPendingReviews(actor, query);
+      const result = await this.service.listPendingReviews(this.getActor(req), query);
       res.status(200).json({ success: true, ...result });
     } catch (error) {
       next(error);
@@ -114,11 +107,7 @@ export class KycController {
   getAdminDetailsById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = kycIdParamsSchema.parse(req.params);
-      const actor = {
-        id: req.user?.id ?? '',
-        role: req.user?.role ?? '',
-      };
-      const kyc = await this.service.getAdminDetailsById(id, actor);
+      const kyc = await this.service.getAdminDetailsById(id, this.getActor(req));
       res.status(200).json({ success: true, kyc });
     } catch (error) {
       next(error);
@@ -128,11 +117,7 @@ export class KycController {
   getReviewHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = kycIdParamsSchema.parse(req.params);
-      const actor = {
-        id: req.user?.id ?? '',
-        role: req.user?.role ?? '',
-      };
-      const history = await this.service.getReviewHistory(id, actor);
+      const history = await this.service.getReviewHistory(id, this.getActor(req));
       res.status(200).json({ success: true, history });
     } catch (error) {
       next(error);
@@ -142,11 +127,7 @@ export class KycController {
   approve = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = kycIdParamsSchema.parse(req.params);
-      const actor = {
-        id: req.user?.id ?? '',
-        role: req.user?.role ?? '',
-      };
-      const kyc = await this.service.approveKyc(id, actor);
+      const kyc = await this.service.approveKyc(id, this.getActor(req));
       res.status(200).json({ success: true, message: 'KYC approved successfully', kyc });
     } catch (error) {
       next(error);
@@ -157,11 +138,7 @@ export class KycController {
     try {
       const { id } = kycIdParamsSchema.parse(req.params);
       const { reason } = adminKycReviewReasonSchema.parse(req.body);
-      const actor = {
-        id: req.user?.id ?? '',
-        role: req.user?.role ?? '',
-      };
-      const kyc = await this.service.rejectKyc(id, actor, reason);
+      const kyc = await this.service.rejectKyc(id, this.getActor(req), reason);
       res.status(200).json({ success: true, message: 'KYC rejected successfully', kyc });
     } catch (error) {
       next(error);
@@ -172,17 +149,41 @@ export class KycController {
     try {
       const { id } = kycIdParamsSchema.parse(req.params);
       const { reason } = adminKycReviewReasonSchema.parse(req.body);
-      const actor = {
-        id: req.user?.id ?? '',
-        role: req.user?.role ?? '',
-      };
-      const kyc = await this.service.requestKycCorrection(id, actor, reason);
+      const kyc = await this.service.requestKycCorrection(id, this.getActor(req), reason);
       res.status(200).json({ success: true, message: 'Correction requested successfully', kyc });
     } catch (error) {
       next(error);
     }
   };
+
+  setLegalHold = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = kycIdParamsSchema.parse(req.params);
+      const { legalHold } = kycLegalHoldSchema.parse(req.body);
+      const kyc = await this.service.setLegalHold(id, this.getActor(req), legalHold);
+      res.status(200).json({ success: true, message: 'Legal hold updated successfully', kyc });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  anonymize = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = kycIdParamsSchema.parse(req.params);
+      const { force } = kycAnonymizeSchema.parse(req.body ?? {});
+      const result = await this.service.anonymizeKyc(id, this.getActor(req), force);
+      res.status(200).json({ success: true, message: 'KYC anonymization processed', result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  runPurge = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.service.runPurge(this.getActor(req));
+      res.status(200).json({ success: true, message: 'KYC purge completed', result });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
-
-
-

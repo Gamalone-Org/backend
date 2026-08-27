@@ -57,6 +57,14 @@ export const adminKycReviewReasonSchema = z.object({
   reason: z.string().trim().min(1, 'Reason cannot be empty'),
 }).strict();
 
+export const kycLegalHoldSchema = z.object({
+  legalHold: z.boolean(),
+}).strict();
+
+export const kycAnonymizeSchema = z.object({
+  force: z.boolean().optional().default(false),
+}).strict();
+
 export type SubmitKycSchemaInput = z.infer<typeof submitKycSchema>;
 export type UploadKycDocumentSchemaInput = z.infer<typeof uploadKycDocumentSchema>;
 export type AdminKycListQuerySchemaInput = z.infer<typeof adminKycListQuerySchema>;

@@ -20,6 +20,15 @@ vi.mock('../../src/modules/kyc/kyc.service.js', () => ({
   },
 }));
 
+vi.mock('../../src/shared/services/cloudinary/index.js', () => ({
+  CloudinaryService: class {
+    uploadDocument = vi.fn();
+    deleteAsset = vi.fn();
+    getMetadata = vi.fn();
+    generateSignedUrl = vi.fn();
+  },
+}));
+
 vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
   requireAuth: (req: any, _res: any, next: any) => {
     const authorization = req.headers.authorization;
@@ -124,6 +133,8 @@ describe('KYC routes', () => {
     expect(mockGetById).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', {
       id: 'user-2',
       role: 'ADMIN',
+      adminProfileId: null,
+      adminAccessLevel: null,
     });
   });
 
@@ -178,6 +189,8 @@ describe('KYC routes', () => {
     expect(mockGetDocuments).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', {
       id: 'user-1',
       role: 'ACHETEUR',
+      adminProfileId: null,
+      adminAccessLevel: null,
     });
   });
 
@@ -191,7 +204,7 @@ describe('KYC routes', () => {
     expect(mockDeleteDocument).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',
       '22222222-2222-4222-8222-222222222222',
-      { id: 'user-1', role: 'ACHETEUR' }
+      { id: 'user-1', role: 'ACHETEUR', adminProfileId: null, adminAccessLevel: null }
     );
   });
 });

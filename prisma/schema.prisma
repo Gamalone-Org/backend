@@ -157,6 +157,8 @@ model User {
   role                        UserRole                @default(ACHETEUR)
   telephoneVerificationStatus PhoneVerificationStatus @default(NON_VERIFIE)
   telephoneVerifiedAt         DateTime?
+  anonymizedAt                DateTime?
+  deletedAt                   DateTime?
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
 
@@ -167,6 +169,8 @@ model User {
   kycSubmissions Kyc[]
 
   @@index([telephone])
+  @@index([anonymizedAt])
+  @@index([deletedAt])
   @@map("users")
 }
 
@@ -205,8 +209,8 @@ model AdminProfile {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  validatedArtisans ArtisanProfile[] @relation("ArtisanKycValidation")
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  validatedArtisans ArtisanProfile[]   @relation("ArtisanKycValidation")
   publishedOeuvres  Oeuvre[]           @relation("OeuvrePublication")
   reviewedKycs      Kyc[]              @relation("AdminKycReview")
   reviewHistories   KycReviewHistory[] @relation("AdminKycReviewHistory")
@@ -269,36 +273,50 @@ model Kyc {
   identityDocument Json?
   supportingDocs   Json?
 
+  retentionUntil DateTime?
+  anonymizedAt   DateTime?
+  deletedAt      DateTime?
+  legalHold      Boolean   @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   reviewedByAdmin AdminProfile? @relation("AdminKycReview", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
 
-  previousSubmission Kyc?          @relation("KycResubmission", fields: [resubmissionOfId], references: [id], onDelete: SetNull)
-  resubmissions      Kyc[]         @relation("KycResubmission")
+  previousSubmission Kyc?               @relation("KycResubmission", fields: [resubmissionOfId], references: [id], onDelete: SetNull)
+  resubmissions      Kyc[]              @relation("KycResubmission")
   documents          KycDocument[]
   reviewHistory      KycReviewHistory[]
 
   @@index([userId, status])
   @@index([reviewedByAdminId])
+  @@index([retentionUntil])
+  @@index([deletedAt])
+  @@index([anonymizedAt])
+  @@index([legalHold])
   @@map("kyc_records")
 }
 
 model KycReviewHistory {
   id        String          @id @default(uuid()) @db.Uuid
   kycId     String          @db.Uuid
-  adminId   String          @db.Uuid
+  adminId   String?         @db.Uuid
   action    KycReviewAction
   reason    String?         @db.Text
   createdAt DateTime        @default(now())
 
-  kyc   Kyc          @relation(fields: [kycId], references: [id], onDelete: Cascade)
-  admin AdminProfile @relation("AdminKycReviewHistory", fields: [adminId], references: [id], onDelete: Cascade)
+  adminProfileIdSnapshot   String?           @db.Uuid
+  adminDepartementSnapshot String?
+  adminNiveauAccesSnapshot AdminAccessLevel?
+
+  kyc   Kyc           @relation(fields: [kycId], references: [id], onDelete: Restrict)
+  admin AdminProfile? @relation("AdminKycReviewHistory", fields: [adminId], references: [id], onDelete: SetNull)
 
   @@index([kycId])
   @@index([adminId])
+  @@index([adminProfileIdSnapshot])
   @@map("kyc_review_history")
 }
 
@@ -315,13 +333,19 @@ model KycDocument {
   bytes        Int
   assetId      String?
 
+  retentionUntil DateTime?
+  anonymizedAt   DateTime?
+  deletedAt      DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  kyc Kyc @relation(fields: [kycId], references: [id], onDelete: Cascade)
+  kyc Kyc @relation(fields: [kycId], references: [id], onDelete: Restrict)
 
   @@index([kycId])
   @@index([kycId, documentType])
+  @@index([retentionUntil])
+  @@index([deletedAt])
   @@map("kyc_documents")
 }
 

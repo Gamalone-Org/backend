@@ -1,10 +1,38 @@
-import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
+import type { KycReviewAction, Prisma, PrismaClient } from '../../generated/prisma/client.js';
+import { computeRetentionUntil } from '../../config/kyc.js';
 import type { AdminKycListQuery, CreateKycDocumentData, SubmitKycInput } from './kyc.types.js';
-
 const activeStatuses = ['BROUILLON', 'SOUMIS', 'EN_ATTENTE', 'VALIDE', 'CORRECTION_REQUISE'] as const;
 
 export class KycRepository {
   constructor(private readonly prisma: PrismaClient) {}
+
+  private async createReviewHistoryEntry(
+    tx: Prisma.TransactionClient,
+    kycId: string,
+    adminProfileId: string,
+    action: KycReviewAction,
+    reason: string | null
+  ) {
+    const adminProfile = await tx.adminProfile.findUnique({
+      where: { id: adminProfileId },
+    });
+
+    if (!adminProfile) {
+      throw new Error(`Admin profile not found: ${adminProfileId}`);
+    }
+
+    return tx.kycReviewHistory.create({
+      data: {
+        kycId,
+        adminId: adminProfile.id,
+        adminProfileIdSnapshot: adminProfile.id,
+        adminDepartementSnapshot: adminProfile.departement,
+        adminNiveauAccesSnapshot: adminProfile.niveauAcces,
+        action,
+        reason,
+      },
+    });
+  }
 
   async findUserPhoneVerification(userId: string) {
     return this.prisma.user.findUnique({
@@ -41,10 +69,12 @@ export class KycRepository {
   }
 
   async createSubmission(userId: string, input: SubmitKycInput) {
+    const submittedAt = new Date();
     const data: Prisma.KycCreateInput = {
       user: { connect: { id: userId } },
       status: 'SOUMIS',
-      submittedAt: new Date(),
+      submittedAt,
+      retentionUntil: computeRetentionUntil(submittedAt),
       identityData: input.identityData as Prisma.InputJsonValue,
       professionData: input.professionData as Prisma.InputJsonValue | undefined,
       additionalInfo: input.additionalInfo as Prisma.InputJsonValue | undefined,
@@ -57,11 +87,13 @@ export class KycRepository {
   }
 
   async createResubmission(userId: string, previousKycId: string, input: SubmitKycInput) {
+    const submittedAt = new Date();
     const data: Prisma.KycCreateInput = {
       user: { connect: { id: userId } },
       previousSubmission: { connect: { id: previousKycId } },
       status: 'SOUMIS',
-      submittedAt: new Date(),
+      submittedAt,
+      retentionUntil: computeRetentionUntil(submittedAt),
       identityData: input.identityData as Prisma.InputJsonValue,
       professionData: input.professionData as Prisma.InputJsonValue | undefined,
       additionalInfo: input.additionalInfo as Prisma.InputJsonValue | undefined,
@@ -73,7 +105,7 @@ export class KycRepository {
     return this.prisma.kyc.create({ data });
   }
 
-  async createDocument(kycId: string, data: CreateKycDocumentData) {
+  async createDocument(kycId: string, data: CreateKycDocumentData, retentionUntil?: Date | null) {
     return this.prisma.kycDocument.create({
       data: {
         kyc: { connect: { id: kycId } },
@@ -84,13 +116,14 @@ export class KycRepository {
         format: data.format,
         bytes: data.bytes,
         assetId: data.assetId,
+        retentionUntil: retentionUntil ?? undefined,
       },
     });
   }
 
   async findDocumentsByKycId(kycId: string) {
     return this.prisma.kycDocument.findMany({
-      where: { kycId },
+      where: { kycId, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
   }
@@ -102,8 +135,9 @@ export class KycRepository {
   }
 
   async deleteDocument(documentId: string) {
-    return this.prisma.kycDocument.delete({
+    return this.prisma.kycDocument.update({
       where: { id: documentId },
+      data: { deletedAt: new Date() },
     });
   }
 
@@ -268,14 +302,7 @@ export class KycRepository {
         },
       });
 
-      await tx.kycReviewHistory.create({
-        data: {
-          kycId: id,
-          adminId: adminProfileId,
-          action: 'APPROUVER',
-          reason: null,
-        },
-      });
+      await this.createReviewHistoryEntry(tx, id, adminProfileId, 'APPROUVER', null);
 
       if (kyc.user) {
         if (kyc.user.statut === 'EN_ATTENTE_VALIDATION') {
@@ -323,14 +350,7 @@ export class KycRepository {
         },
       });
 
-      await tx.kycReviewHistory.create({
-        data: {
-          kycId: id,
-          adminId: adminProfileId,
-          action: 'REJETER',
-          reason,
-        },
-      });
+      await this.createReviewHistoryEntry(tx, id, adminProfileId, 'REJETER', reason);
 
       return updatedKyc;
     });
@@ -358,14 +378,7 @@ export class KycRepository {
         },
       });
 
-      await tx.kycReviewHistory.create({
-        data: {
-          kycId: id,
-          adminId: adminProfileId,
-          action: 'DEMANDE_CORRECTION',
-          reason,
-        },
-      });
+      await this.createReviewHistoryEntry(tx, id, adminProfileId, 'DEMANDE_CORRECTION', reason);
 
       return updatedKyc;
     });
