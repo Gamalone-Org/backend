@@ -44,6 +44,11 @@ enum ArtisanSubscription {
   PREMIUM
 }
 
+enum ArtisanType {
+  ARTISAN
+  ARTISTE
+}
+
 enum AdminAccessLevel {
   SUPPORT
   MODERATEUR
@@ -104,12 +109,18 @@ enum ArtworkStatus {
   RETIREE
 }
 
+enum MediaType {
+  OEUVRE
+  PREPARATION
+  ATELIER
+}
+
 enum OrderStatus {
-  EN_ATTENTE
-  CONFIRMEE
-  EN_PREPARATION
+  COMMANDE
+  PREPARATION
   EXPEDIEE
   LIVREE
+  CLOTUREE
   ANNULEE
   REMBOURSEE
 }
@@ -178,6 +189,7 @@ model User {
 model ArtisanProfile {
   id                  String              @id @default(uuid()) @db.Uuid
   userId              String              @unique @db.Uuid
+  type                ArtisanType         @default(ARTISAN)
   nomAtelier          String
   specialite          String
   biographie          String              @db.Text
@@ -190,6 +202,10 @@ model ArtisanProfile {
   commission          Decimal             @default(0) @db.Decimal(5, 2)
   validatedByAdminId  String?             @db.Uuid
   validatedAt         DateTime?
+  photoAtelierUrl     String?
+  photoAtelierPublicId String?
+  photoAtelierMimeType String?
+  photoAtelierSize    Int?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
@@ -215,6 +231,8 @@ model AdminProfile {
   publishedOeuvres  Oeuvre[]           @relation("OeuvrePublication")
   reviewedKycs      Kyc[]              @relation("AdminKycReview")
   reviewHistories   KycReviewHistory[] @relation("AdminKycReviewHistory")
+  articles          Article[]          @relation("ArticlePublication")
+  authoredArticles  Article[]          @relation("ArticleAuthor")
 
   @@map("admin_profiles")
 }
@@ -354,16 +372,57 @@ model KycDocument {
 // Catalogue
 // ---------------------------------------------------------------------------
 
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ArticleStatus {
+  BROUILLON
+  PLANIFIE
+  PUBLIE
+}
+
 model Categorie {
-  id          String   @id @default(uuid()) @db.Uuid
-  nom         String   @unique
-  description String   @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                      String         @id @default(uuid()) @db.Uuid
+  nom                     String         @unique
+  description             String         @db.Text
+  slug                    String         @unique
+  imageCouvertureUrl      String?
+  imageCouverturePublicId String?
+  statut                  CategoryStatus @default(ACTIVE)
+  position                Int            @default(0)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
 
-  oeuvres Oeuvre[]
+  oeuvres        Oeuvre[]
+  sousCategories SousCategorie[]
+  articles       Article[]
 
+  @@index([slug])
+  @@index([statut])
   @@map("categories")
+}
+
+model SousCategorie {
+  id                      String         @id @default(uuid()) @db.Uuid
+  nom                     String
+  description             String         @db.Text
+  slug                    String         @unique
+  imageCouvertureUrl      String?
+  imageCouverturePublicId String?
+  statut                  CategoryStatus @default(ACTIVE)
+  position                Int            @default(0)
+  categorieId             String         @db.Uuid
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  categorie Categorie @relation(fields: [categorieId], references: [id], onDelete: Restrict)
+
+  @@unique([categorieId, nom])
+  @@index([categorieId])
+  @@index([slug])
+  @@map("sous_categories")
 }
 
 model Oeuvre {
@@ -380,6 +439,8 @@ model Oeuvre {
   artisanId          String        @db.Uuid
   categorieId        String        @db.Uuid
   publishedByAdminId String?       @db.Uuid
+  rejectionReason    String?
+  estMiseEnAvant     Boolean       @default(false)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
@@ -393,24 +454,29 @@ model Oeuvre {
   @@index([artisanId])
   @@index([categorieId])
   @@index([statut])
+  @@index([estMiseEnAvant])
   @@map("oeuvres")
 }
 
 model Media {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
   url       String
   publicId  String
   mimeType  String
   size      Int
   width     Int?
   height    Int?
-  oeuvreId  String   @db.Uuid
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  ordre     Int       @default(0)
+  type      MediaType @default(OEUVRE)
+  oeuvreId  String    @db.Uuid
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   oeuvre Oeuvre @relation(fields: [oeuvreId], references: [id], onDelete: Cascade)
 
   @@index([oeuvreId])
+  @@index([oeuvreId, ordre])
+  @@index([oeuvreId, type])
   @@map("media")
 }
 
@@ -428,13 +494,48 @@ model Certificat {
 }
 
 // ---------------------------------------------------------------------------
+// Éditorial / Articles
+// ---------------------------------------------------------------------------
+
+model Article {
+  id                  String        @id @default(uuid()) @db.Uuid
+  titre               String
+  contenu             String        @db.Text
+  slug                String        @unique
+  metaDescription     String?       @db.Text
+  statut              ArticleStatus @default(BROUILLON)
+  datePublication     DateTime?
+  datePlanification   DateTime?
+  categorieId         String        @db.Uuid
+  imageCouvertureUrl  String?
+  imageCouverturePublicId String?
+  auteurId            String        @db.Uuid
+  publishedByAdminId  String?       @db.Uuid
+  deletedAt           DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  categorie        Categorie       @relation(fields: [categorieId], references: [id], onDelete: Restrict)
+  auteur           AdminProfile    @relation("ArticleAuthor", fields: [auteurId], references: [id], onDelete: Restrict)
+  publishedByAdmin AdminProfile?   @relation("ArticlePublication", fields: [publishedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([slug])
+  @@index([categorieId])
+  @@index([statut])
+  @@index([auteurId])
+  @@index([datePublication])
+  @@index([deletedAt])
+  @@map("articles")
+}
+
+// ---------------------------------------------------------------------------
 // Commandes
 // ---------------------------------------------------------------------------
 
 model Commande {
   id             String      @id @default(uuid()) @db.Uuid
   dateCreation   DateTime    @default(now())
-  statut         OrderStatus @default(EN_ATTENTE)
+  statut         OrderStatus @default(COMMANDE)
   montantTotal   Decimal     @db.Decimal(12, 0)
   commission     Decimal     @default(0) @db.Decimal(12, 0)
   typeCommande   OrderType   @default(STANDARD)

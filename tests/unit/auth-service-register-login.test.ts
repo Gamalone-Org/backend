@@ -127,6 +127,9 @@ describe('AuthService.register', () => {
       motDePasseHash: 'hashed-password',
       role: 'ACHETEUR',
       artisanProfile: null,
+      buyerProfile: {
+        adresseLivraison: '',
+      },
     });
     expect(repository.findByEmail).toHaveBeenCalledWith('user@example.com');
     expect(otpService.createOtp).toHaveBeenCalledWith({
@@ -152,13 +155,79 @@ describe('AuthService.register', () => {
       motDePasseHash: 'hashed-password',
       role: 'ARTISAN',
       artisanProfile: {
+        type: 'ARTISAN',
         nomAtelier: 'Atelier Kokou',
         specialite: 'Sculpture',
         localisation: 'Lomé, Togo',
         biographie: '',
         anneesExperience: 0,
       },
+      buyerProfile: null,
     });
+  });
+
+  it('creates an ARTISAN profile with an explicit ARTISTE type', async () => {
+    const { service, repository } = buildService();
+
+    await service.register({ ...artisanInput, type: 'ARTISTE' as const });
+
+    expect(repository.createUserWithCredentials).toHaveBeenCalledWith({
+      telephone: '+22890123456',
+      email: null,
+      nom: 'Atelier Kokou',
+      motDePasseHash: 'hashed-password',
+      role: 'ARTISAN',
+      artisanProfile: {
+        type: 'ARTISTE',
+        nomAtelier: 'Atelier Kokou',
+        specialite: 'Sculpture',
+        localisation: 'Lomé, Togo',
+        biographie: '',
+        anneesExperience: 0,
+      },
+      buyerProfile: null,
+    });
+  });
+
+  it('creates an ACHETEUR with a BuyerProfile so commands can be placed', async () => {
+    const { service, repository } = buildService();
+
+    await service.register(acheteurInput);
+
+    expect(repository.createUserWithCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'ACHETEUR',
+        buyerProfile: {
+          adresseLivraison: '',
+        },
+      })
+    );
+  });
+
+  it('passes no BuyerProfile for an ARTISAN', async () => {
+    const { service, repository } = buildService();
+
+    await service.register(artisanInput);
+
+    expect(repository.createUserWithCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'ARTISAN',
+        buyerProfile: null,
+      })
+    );
+  });
+
+  it('defaults to ARTISAN type when an ARTISAN registers without a type', async () => {
+    const { service, repository } = buildService();
+
+    await service.register(artisanInput);
+
+    expect(repository.createUserWithCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'ARTISAN',
+        artisanProfile: expect.objectContaining({ type: 'ARTISAN' }),
+      })
+    );
   });
 
   it('stores no email when none is provided', async () => {

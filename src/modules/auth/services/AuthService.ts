@@ -1,4 +1,4 @@
-import { UserRole, type User, OtpPurpose } from '../../../generated/prisma/client.js';
+import { ArtisanType, UserRole, type User, OtpPurpose } from '../../../generated/prisma/client.js';
 import { OtpService } from './OtpService.js';
 import { PhoneService } from './PhoneService.js';
 import { JwtService } from './JwtService.js';
@@ -31,6 +31,7 @@ export type RegisterInput = {
   telephone: string;
   email?: string;
   motDePasse: string;
+  type?: ArtisanType;
   specialite?: string;
   localisation?: string;
 };
@@ -146,11 +147,18 @@ export class AuthService {
         artisanProfile:
           input.role === 'ARTISAN'
             ? {
+                type: input.type ?? ArtisanType.ARTISAN,
                 nomAtelier: nom,
                 specialite: input.specialite ?? '',
                 localisation: input.localisation ?? '',
                 biographie: '',
                 anneesExperience: 0,
+              }
+            : null,
+        buyerProfile:
+          input.role === 'ACHETEUR'
+            ? {
+                adresseLivraison: '',
               }
             : null,
       });

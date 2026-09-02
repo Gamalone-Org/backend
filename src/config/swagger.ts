@@ -16,6 +16,7 @@ const tags = [
   { name: 'Certificates', description: 'Certificates and validation assets' },
   { name: 'KYC', description: 'Identity validation flows' },
   { name: 'Admin', description: 'Administrative actions' },
+  { name: 'Articles', description: 'Articles éditoriaux (back-office Admin)' },
   { name: 'Notifications', description: 'Notifications and messaging' },
   { name: 'Support', description: 'Support and aid flows' },
   { name: 'Health', description: 'System health endpoints' },
@@ -822,6 +823,1466 @@ export const swaggerDocument = {
         },
       },
     },
+    '/api/v1/oeuvres': {
+      get: {
+        tags: ['Artworks'],
+        summary: 'List published artworks (public)',
+        description:
+          'Public consultation of published artworks with pagination, filters (categorieId, prixMin/prixMax, artisanType, localisation, q), and sorting. Only PUBLIEES artworks are exposed.',
+        security: [],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 50 },
+          },
+          {
+            name: 'categorieId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'prixMin',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', minimum: 0 },
+          },
+          {
+            name: 'prixMax',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', minimum: 0 },
+          },
+          {
+            name: 'artisanType',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['ARTISAN', 'ARTISTE'] },
+          },
+          { name: 'localisation', in: 'query', required: false, schema: { type: 'string' } },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+          {
+            name: 'tri',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['pertinence', 'prix_asc', 'prix_desc', 'recent'] },
+          },
+        ],
+        responses: {
+          '200': { description: 'List of published artworks' },
+          '400': { description: 'Invalid query parameters' },
+        },
+      },
+    },
+    '/api/v1/oeuvres/featured': {
+      get: {
+        tags: ['Artworks'],
+        summary: 'List featured published artworks (public)',
+        description:
+          'Returns artworks that are both PUBLIEES and flagged as featured (estMiseEnAvant).',
+        security: [],
+        parameters: [
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 12, maximum: 50 },
+          },
+        ],
+        responses: {
+          '200': { description: 'List of featured published artworks' },
+          '400': { description: 'Invalid query parameters' },
+        },
+      },
+    },
+    '/api/v1/oeuvres/{id}': {
+      get: {
+        tags: ['Artworks'],
+        summary: 'Get a single published artwork (public)',
+        description:
+          'Public detail of a PUBLIEE artwork including artisan, categorie, medias and certificat.',
+        security: [],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Published artwork details' },
+          '400': { description: 'Invalid artwork id' },
+          '404': { description: 'Artwork not found or not published' },
+        },
+      },
+    },
+    '/api/v1/artisans/{artisanId}/oeuvres': {
+      get: {
+        tags: ['Artworks'],
+        summary: 'List published artworks of an artisan (public)',
+        description: 'Public paginated list of an artisan PUBLIEES artworks.',
+        security: [],
+        parameters: [
+          {
+            name: 'artisanId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 50 },
+          },
+        ],
+        responses: {
+          '200': { description: 'List of the artisan published artworks' },
+          '400': { description: 'Invalid parameters' },
+          '404': { description: 'Artisan not found' },
+        },
+      },
+    },
+    '/api/v1/artisan/oeuvres': {
+      get: {
+        tags: ['Artworks'],
+        summary: 'List my artworks (artisan)',
+        description:
+          'Consultation only: paginated list of the authenticated artisan own artworks (the artisan never creates or modifies artworks; the admin owns artwork CRUD).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 50 },
+          },
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: ['BROUILLON', 'EN_ATTENTE_VALIDATION', 'PUBLIEE', 'RETIREE'],
+            },
+          },
+        ],
+        responses: {
+          '200': { description: 'List of my artworks' },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+        },
+      },
+    },
+    '/api/v1/artisan/oeuvres/{id}': {
+      get: {
+        tags: ['Artworks'],
+        summary: 'Get my artwork (artisan)',
+        description: 'Consultation only: returns a single artwork owned by the authenticated artisan.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Artwork details' },
+          '403': { description: 'Forbidden: artwork belongs to another artisan' },
+          '404': { description: 'Artwork not found' },
+        },
+      },
+    },
+    '/api/v1/admin/oeuvres': {
+      post: {
+        tags: ['Artworks'],
+        summary: 'Create an artwork (admin)',
+        description:
+          'Creates a BROUILLON artwork on behalf of an artisan. artisanId (ArtisanProfile id) is required and validated server-side (profile exists, role ARTISAN, account ACTIF). Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/OeuvreCreateRequest' },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Artwork created' },
+          '400': { description: 'Invalid payload or missing/invalid artisanId' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required or artisan not active' },
+          '404': { description: 'Artisan profile or category not found' },
+        },
+      },
+      get: {
+        tags: ['Artworks'],
+        summary: 'List all artworks (admin)',
+        description:
+          'Admin listing of artworks with optional filters (statut, artisanId, categorieId). Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 50 },
+          },
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: ['BROUILLON', 'EN_ATTENTE_VALIDATION', 'PUBLIEE', 'RETIREE'],
+            },
+          },
+          {
+            name: 'artisanId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'categorieId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        responses: {
+          '200': { description: 'List of all artworks' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/oeuvres/{id}': {
+      get: {
+        tags: ['Artworks'],
+        summary: 'Get artwork details (admin)',
+        description:
+          'Returns full artwork details for admin review. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Artwork details' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Artwork not found' },
+        },
+      },
+      patch: {
+        tags: ['Artworks'],
+        summary: 'Update an artwork (admin)',
+        description:
+          'Updates an artwork content. Only non-published artworks may be edited. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/OeuvreUpdateRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Artwork updated' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Artwork not found' },
+          '409': { description: 'Artwork is published and cannot be modified' },
+        },
+      },
+      delete: {
+        tags: ['Artworks'],
+        summary: 'Delete an artwork (admin)',
+        description:
+          'Deletes a BROUILLON artwork without linked order lines. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '204': { description: 'Artwork deleted' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Artwork not found' },
+          '409': { description: 'Artwork cannot be deleted (not brouillon or has order lines)' },
+        },
+      },
+    },
+    '/api/v1/admin/oeuvres/{id}/publish': {
+      post: {
+        tags: ['Artworks'],
+        summary: 'Publish an artwork (admin)',
+        description:
+          'Publishes a BROUILLON artwork (statut PUBLIEE), records the publishing admin (publishedByAdminId) and transactionally creates its SHA-256 certificate. At least one OEUVRE media is required. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Artwork published and certificate created' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Artwork not found' },
+          '409': { description: 'Artwork is not publishable or has no OEUVRE media' },
+        },
+      },
+    },
+    '/api/v1/admin/oeuvres/{id}/withdraw': {
+      post: {
+        tags: ['Artworks'],
+        summary: 'Withdraw an artwork (admin)',
+        description:
+          'Withdraws a PUBLIEE artwork (RETIREE) and invalidates its certificate. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Artwork withdrawn' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Artwork not found' },
+          '409': { description: 'Artwork is not published' },
+        },
+      },
+    },
+    '/api/v1/admin/oeuvres/{id}/medias': {
+      post: {
+        tags: ['Artworks'],
+        summary: 'Upload an artwork media (admin)',
+        description:
+          'Uploads an image (JPEG/PNG/WEBP, max 10MB) for an artwork. Pass type=OEUVRE (max 7) or type=PREPARATION (max 3). Limits are enforced server-side. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          {
+            name: 'type',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['OEUVRE', 'PREPARATION'], default: 'OEUVRE' },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: { file: { type: 'string', format: 'binary' } },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Media uploaded' },
+          '400': { description: 'Invalid or unsupported file, no file provided' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Artwork not found' },
+          '409': { description: 'Media limit reached for this type (7 OEUVRE / 3 PREPARATION)' },
+          '502': { description: 'Cloudinary upload failure' },
+        },
+      },
+    },
+    '/api/v1/admin/oeuvres/{id}/medias/{mediaId}': {
+      delete: {
+        tags: ['Artworks'],
+        summary: 'Delete an artwork media (admin)',
+        description: 'Deletes a media from an artwork, removing it from Cloudinary.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          {
+            name: 'mediaId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        responses: {
+          '204': { description: 'Media deleted' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Artwork or media not found' },
+        },
+      },
+    },
+    '/api/v1/admin/oeuvres/{id}/medias/reorder': {
+      patch: {
+        tags: ['Artworks'],
+        summary: 'Reorder artwork medias (admin)',
+        description:
+          'Reorders the media list of an artwork by providing the full ordered media ids.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/OeuvreReorderMediasRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Medias reordered' },
+          '400': { description: 'Invalid or incomplete media list, duplicates detected' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Artwork not found' },
+        },
+      },
+    },
+    '/api/v1/admin/oeuvres/artisans/{artisanId}/photo-atelier': {
+      post: {
+        tags: ['Artworks'],
+        summary: 'Set the atelier photo of an artisan (admin)',
+        description:
+          'Uploads the single atelier photo (max 1) for an artisan profile. Replaces any existing photo. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'artisanId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: { file: { type: 'string', format: 'binary' } },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Atelier photo stored' },
+          '400': { description: 'Invalid or unsupported file' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Artisan profile not found' },
+        },
+      },
+      delete: {
+        tags: ['Artworks'],
+        summary: 'Remove the atelier photo of an artisan (admin)',
+        description: 'Removes the single atelier photo of an artisan profile.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'artisanId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        responses: {
+          '204': { description: 'Atelier photo removed' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Artisan profile or photo not found' },
+        },
+      },
+    },
+    '/api/v1/commandes': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Create a command (acheteur)',
+        description:
+          'Creates an order for the authenticated ACHETEUR. Prices, sub-total, commission, fees and total are always recomputed server-side from the published artworks (never trusted from the client). Also creates the linked payment (EN_ATTENTE) and delivery (EN_ATTENTE), and marks the artworks as VENDUES in a single transaction.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CreateCommandeRequest' },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Order created' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: Acheteur profile not found' },
+          '404': { description: 'Artwork not found' },
+          '409': { description: 'Artwork not available for order' },
+        },
+      },
+      get: {
+        tags: ['Orders'],
+        summary: 'List my commands (acheteur)',
+        description: 'Paginated list of the authenticated ACHETEUR own orders.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 50 },
+          },
+        ],
+        responses: {
+          '200': { description: 'List of my orders' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: Acheteur profile not found' },
+        },
+      },
+    },
+    '/api/v1/commandes/{id}': {
+      get: {
+        tags: ['Orders'],
+        summary: 'Get one of my commands (acheteur)',
+        description: 'Returns a single order owned by the authenticated ACHETEUR.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Order details' },
+          '400': { description: 'Invalid order id' },
+          '401': { description: 'Authentication required' },
+          '404': { description: 'Order not found or belongs to another user' },
+        },
+      },
+    },
+    '/api/v1/admin/commandes': {
+      get: {
+        tags: ['Orders'],
+        summary: 'List all commands (admin)',
+        description:
+          'Admin listing of all orders with optional filters (statut, q search on client, artisan or artwork) and pagination. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 50 },
+          },
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: [
+                'COMMANDE',
+                'PREPARATION',
+                'EXPEDIEE',
+                'LIVREE',
+                'CLOTUREE',
+                'ANNULEE',
+                'REMBOURSEE',
+              ],
+            },
+          },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': { description: 'List of all orders' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/commandes/export': {
+      get: {
+        tags: ['Orders'],
+        summary: 'Export commands to CSV (admin)',
+        description:
+          'Exports orders as a CSV file respecting the same filters as the list endpoint. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+          },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': { description: 'CSV file exported' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/commandes/{id}': {
+      get: {
+        tags: ['Orders'],
+        summary: 'Get command details (admin)',
+        description:
+          'Returns full order details (acheteur, lignes, paiement, livraison) for admin review. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Order details' },
+          '400': { description: 'Invalid order id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Order not found' },
+        },
+      },
+    },
+    '/api/v1/admin/commandes/{id}/statut': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Advance order status (admin)',
+        description:
+          'Applies a controlled status transition. Only the direct next step of the normal workflow is accepted: COMMANDE → PREPARATION → EXPEDIEE → LIVREE → CLOTUREE. CLOTUREE, ANNULEE and REMBOURSEE are terminal. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/StatutCommandeRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Status updated' },
+          '400': { description: 'Invalid payload or order id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Order not found' },
+          '409': { description: 'Invalid status transition' },
+        },
+      },
+    },
+    '/api/v1/admin/commandes/{id}/annuler': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Cancel a command (admin)',
+        description:
+          'Cancels an order (statut ANNULEE, terminal). Allowed from COMMANDE, PREPARATION or EXPEDIEE. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Order cancelled' },
+          '400': { description: 'Invalid order id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Order not found' },
+          '409': { description: 'Order cannot be cancelled at its current status' },
+        },
+      },
+    },
+    '/api/v1/categories': {
+      get: {
+        tags: ['Categories'],
+        summary: 'List categories (public)',
+        description:
+          'Paginated public list of ACTIVE categories with their sous-categories. Filters: page, limit, statut, q.',
+        security: [],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 100 },
+          },
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+          },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': { description: 'Paginated list of categories' },
+          '400': { description: 'Invalid query parameters' },
+        },
+      },
+      post: {
+        tags: ['Categories'],
+        summary: 'Create a category (admin)',
+        description:
+          'Creates a category. The slug is auto-generated from the name (unique). statut and position are optional. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  nom: { type: 'string', maxLength: 255 },
+                  description: { type: 'string', default: '' },
+                  statut: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+                  position: { type: 'integer', minimum: 0 },
+                },
+                required: ['nom'],
+                additionalProperties: false,
+              },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Category created' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '409': { description: 'A category with this name already exists' },
+        },
+      },
+    },
+    '/api/v1/categories/{id}': {
+      get: {
+        tags: ['Categories'],
+        summary: 'Get a category (public)',
+        security: [],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Category details' },
+          '400': { description: 'Invalid category id' },
+          '404': { description: 'Category not found' },
+        },
+      },
+      patch: {
+        tags: ['Categories'],
+        summary: 'Update a category (admin)',
+        description: 'Updates nom, description, statut or position. The slug is regenerated when the name changes. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  nom: { type: 'string', maxLength: 255 },
+                  description: { type: 'string' },
+                  statut: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+                  position: { type: 'integer', minimum: 0 },
+                },
+                additionalProperties: false,
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Category updated' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Category not found' },
+          '409': { description: 'A category with this name already exists' },
+        },
+      },
+      delete: {
+        tags: ['Categories'],
+        summary: 'Delete a category (admin)',
+        description:
+          'Deletes a category only if it has no attached sous-categories or oeuvres; otherwise a business conflict is returned. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '204': { description: 'Category deleted' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Category not found' },
+          '409': { description: 'Category still referenced by oeuvres or sous-categories' },
+        },
+      },
+    },
+    '/api/v1/categories/{id}/image': {
+      post: {
+        tags: ['Categories'],
+        summary: 'Upload category cover image (admin)',
+        description:
+          'Uploads a cover image (multipart, field "file") for the category via Cloudinary. Replaces and deletes any previous image. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary' },
+                },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Cover image uploaded' },
+          '400': { description: 'Invalid image or format not allowed' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Category not found' },
+        },
+      },
+      delete: {
+        tags: ['Categories'],
+        summary: 'Delete category cover image (admin)',
+        description: 'Removes the cover image from Cloudinary and clears the fields. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Cover image removed' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Category or image not found' },
+        },
+      },
+    },
+    '/api/v1/categories/{categorieId}/sous-categories': {
+      get: {
+        tags: ['Categories'],
+        summary: 'List sous-categories of a category (public)',
+        security: [],
+        parameters: [
+          {
+            name: 'categorieId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        responses: {
+          '200': { description: 'List of sous-categories' },
+          '400': { description: 'Invalid category id' },
+          '404': { description: 'Category not found' },
+        },
+      },
+      post: {
+        tags: ['Categories'],
+        summary: 'Create a sous-category (admin)',
+        description:
+          'Creates a sous-category under an existing category. The slug is auto-generated. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'categorieId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  nom: { type: 'string', maxLength: 255 },
+                  description: { type: 'string', default: '' },
+                  statut: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+                  position: { type: 'integer', minimum: 0 },
+                },
+                required: ['nom'],
+                additionalProperties: false,
+              },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Sous-category created' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Parent category not found' },
+          '409': { description: 'Duplicate name within the category' },
+        },
+      },
+    },
+    '/api/v1/categories/{categorieId}/sous-categories/{sousCategorieId}': {
+      patch: {
+        tags: ['Categories'],
+        summary: 'Update a sous-category (admin)',
+        description: 'Updates nom, description, statut or position of a sous-category. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'categorieId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'sousCategorieId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  nom: { type: 'string', maxLength: 255 },
+                  description: { type: 'string' },
+                  statut: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+                  position: { type: 'integer', minimum: 0 },
+                },
+                additionalProperties: false,
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Sous-category updated' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Sous-category not found' },
+          '409': { description: 'Duplicate name within the category' },
+        },
+      },
+      delete: {
+        tags: ['Categories'],
+        summary: 'Delete a sous-category (admin)',
+        description: 'Deletes a sous-category. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'categorieId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'sousCategorieId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        responses: {
+          '204': { description: 'Sous-category deleted' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Sous-category not found' },
+          '409': { description: 'Sous-category still referenced' },
+        },
+      },
+    },
+    '/api/v1/categories/{categorieId}/sous-categories/{sousCategorieId}/image': {
+      post: {
+        tags: ['Categories'],
+        summary: 'Upload sous-category cover image (admin)',
+        description:
+          'Uploads a cover image (multipart, field "file") for the sous-category via Cloudinary. Replaces and deletes any previous image. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'categorieId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'sousCategorieId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary' },
+                },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Cover image uploaded' },
+          '400': { description: 'Invalid image or format not allowed' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Sous-category not found' },
+        },
+      },
+      delete: {
+        tags: ['Categories'],
+        summary: 'Delete sous-category cover image (admin)',
+        description: 'Removes the cover image from Cloudinary and clears the fields. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'categorieId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'sousCategorieId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+          },
+        ],
+        responses: {
+          '200': { description: 'Cover image removed' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Sous-category or image not found' },
+        },
+      },
+    },
+    '/api/v1/admin/articles': {
+      post: {
+        tags: ['Articles'],
+        summary: 'Create an article (admin)',
+        description:
+          'Creates an article in status BROUILLON. The slug is auto-generated from the title (unique, collision handled). The authenticated admin is recorded as author. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ArticleCreateRequest' },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Article created' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Article category not found' },
+          '409': { description: 'Admin profile not found' },
+        },
+      },
+      get: {
+        tags: ['Articles'],
+        summary: 'List articles (admin)',
+        description:
+          'Paginated list of non-deleted articles with filters (statut, categorieId, q) and sorting (tri). Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 100 },
+          },
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['BROUILLON', 'PLANIFIE', 'PUBLIE'] },
+          },
+          {
+            name: 'categorieId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+          {
+            name: 'tri',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['recent', 'plus_ancien', 'titre'] },
+          },
+        ],
+        responses: {
+          '200': { description: 'Paginated list of articles' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/articles/{id}': {
+      get: {
+        tags: ['Articles'],
+        summary: 'Get an article (admin)',
+        description:
+          'Returns full article details including category and author. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Article details' },
+          '400': { description: 'Invalid article id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Article not found' },
+        },
+      },
+      patch: {
+        tags: ['Articles'],
+        summary: 'Update an article (admin)',
+        description:
+          'Updates titre, contenu, metaDescription or categorieId. The slug is regenerated when the title changes. Only BROUILLON or PLANIFIE articles may be edited. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ArticleUpdateRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Article updated' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Article or category not found' },
+          '409': { description: 'Article is published and cannot be modified' },
+        },
+      },
+      delete: {
+        tags: ['Articles'],
+        summary: 'Delete an article (admin)',
+        description:
+          'Soft-deletes an article (deletedAt set) and removes its cover image from Cloudinary. Historical references are preserved. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '204': { description: 'Article soft-deleted' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Article not found' },
+        },
+      },
+    },
+    '/api/v1/admin/articles/{id}/publish': {
+      post: {
+        tags: ['Articles'],
+        summary: 'Publish an article (admin)',
+        description:
+          'Transitions a BROUILLON or PLANIFIE article to PUBLIE, sets datePublication and records the publishing admin. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Article published' },
+          '400': { description: 'Invalid article id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Article not found' },
+          '409': { description: 'Already published or invalid transition' },
+        },
+      },
+    },
+    '/api/v1/admin/articles/{id}/schedule': {
+      post: {
+        tags: ['Articles'],
+        summary: 'Schedule an article (admin)',
+        description:
+          'Transitions a BROUILLON article to PLANIFIE with a datePlanification. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ArticleScheduleRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Article scheduled' },
+          '400': { description: 'Invalid payload or article id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Article not found' },
+          '409': { description: 'Article is not a brouillon' },
+        },
+      },
+    },
+    '/api/v1/admin/articles/{id}/unpublish': {
+      post: {
+        tags: ['Articles'],
+        summary: 'Unpublish an article (admin)',
+        description:
+          'Transitions a PLANIFIE or PUBLIE article back to BROUILLON, clearing publication dates. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Article returned to draft' },
+          '400': { description: 'Invalid article id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Article not found' },
+          '409': { description: 'Article is already a brouillon' },
+        },
+      },
+    },
+    '/api/v1/admin/articles/{id}/cover': {
+      post: {
+        tags: ['Articles'],
+        summary: 'Upload article cover image (admin)',
+        description:
+          'Uploads a cover image (multipart, field "file", JPEG/PNG/WEBP max 10MB) via Cloudinary. Replaces and deletes any previous image. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary' },
+                },
+                required: ['file'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Cover image uploaded' },
+          '400': { description: 'Invalid image, no file, or format not allowed' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Article not found' },
+          '502': { description: 'Cloudinary upload failure' },
+        },
+      },
+      delete: {
+        tags: ['Articles'],
+        summary: 'Delete article cover image (admin)',
+        description:
+          'Removes the cover image from Cloudinary and clears the fields. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Cover image removed' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Article or image not found' },
+        },
+      },
+    },
+    '/api/v1/admin/users': {
+      get: {
+        tags: ['Users'],
+        summary: 'List users (admin)',
+        description:
+          'Paginé, recherche par q (nom/e-mail/téléphone), filtres role, statut et bloques (SUSPENDU). Lecture seule : SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+          { name: 'role', in: 'query', required: false, schema: { type: 'string', enum: ['ACHETEUR', 'ARTISAN', 'ADMIN'] } },
+          { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'] } },
+          { name: 'bloques', in: 'query', required: false, schema: { type: 'string', enum: ['true', 'false'] } },
+        ],
+        responses: {
+          '200': {
+            description: 'Liste des utilisateurs',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminUserListResponse' },
+              },
+            },
+          },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: non-admin or insufficient level' },
+        },
+      },
+      post: {
+        tags: ['Users'],
+        summary: 'Create user (admin)',
+        description:
+          'Créé un ACHETEUR/ARTISAN (MODERATEUR minimum) ou un ADMIN (SUPER_ADMIN uniquement). Le mot de passe est haché ; email et téléphone doivent être uniques.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AdminUserCreateRequest' },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Utilisateur créé',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminUserDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: niveau insuffisant' },
+          '409': { description: 'Conflit email/téléphone' },
+        },
+      },
+    },
+    '/api/v1/admin/users/{id}': {
+      get: {
+        tags: ['Users'],
+        summary: 'Get user detail (admin)',
+        description:
+          'Retourne l’utilisateur avec son profil associé (BuyerProfile, ArtisanProfile ou AdminProfile). SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Détail utilisateur',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminUserDetailResponse' },
+              },
+            },
+          },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: non-admin' },
+          '404': { description: 'Utilisateur non trouvé' },
+        },
+      },
+    },
+    '/api/v1/admin/users/{id}/statut': {
+      patch: {
+        tags: ['Users'],
+        summary: 'Change user status (admin)',
+        description:
+          'Change le statut d’un utilisateur (parmi UserStatus). MODERATEUR minimum. Un administrateur ne peut pas modifier son propre statut.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AdminUserStatusRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Statut mis à jour',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminUserDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: niveau insuffisant ou auto-modification' },
+          '404': { description: 'Utilisateur non trouvé' },
+        },
+      },
+    },
+    '/api/v1/admin/users/{id}/role': {
+      patch: {
+        tags: ['Users'],
+        summary: 'Change user role (admin)',
+        description:
+          'Change le rôle d’un utilisateur. SUPER_ADMIN uniquement. Impossible de modifier son propre rôle. Gère la création/suppression de l’AdminProfile en transaction.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AdminUserRoleRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Rôle mis à jour',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminUserDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN requis ou auto-modification' },
+          '404': { description: 'Utilisateur non trouvé' },
+        },
+      },
+    },
+    '/api/v1/admin/users/export': {
+      get: {
+        tags: ['Users'],
+        summary: 'Export users CSV (admin)',
+        description:
+          'Exporte en CSV les utilisateurs selon les mêmes filtres que la liste (q, role, statut, bloques). SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+          { name: 'role', in: 'query', required: false, schema: { type: 'string', enum: ['ACHETEUR', 'ARTISAN', 'ADMIN'] } },
+          { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'] } },
+          { name: 'bloques', in: 'query', required: false, schema: { type: 'string', enum: ['true', 'false'] } },
+        ],
+        responses: {
+          '200': { description: 'Fichier CSV', content: { 'text/csv': { schema: { type: 'string' } } } },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: non-admin' },
+        },
+      },
+    },
   },
   components: {
     securitySchemes: {
@@ -865,6 +2326,127 @@ export const swaggerDocument = {
         },
         required: ['id', 'telephone', 'role', 'statut', 'createdAt', 'updatedAt'],
       },
+      AdminUserItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nom: { type: 'string', nullable: true, example: 'Awa Mensah' },
+          email: { type: 'string', nullable: true, example: 'awa@example.com' },
+          telephone: { type: 'string', example: '+22890123456' },
+          role: { type: 'string', enum: ['ACHETEUR', 'ARTISAN', 'ADMIN'] },
+          statut: {
+            type: 'string',
+            enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'],
+          },
+          telephoneVerificationStatus: {
+            type: 'string',
+            enum: ['NON_VERIFIE', 'EN_ATTENTE_VERIFICATION', 'VERIFIE', 'BLOQUE'],
+          },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          artisanProfile: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              nomAtelier: { type: 'string' },
+              specialite: { type: 'string' },
+              estCertifie: { type: 'boolean' },
+            },
+          },
+          buyerProfile: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              typeClient: { type: 'string', enum: ['PARTICULIER', 'PROFESSIONNEL', 'COLLECTIONNEUR'] },
+              adresseLivraison: { type: 'string' },
+            },
+          },
+          adminProfile: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              niveauAcces: { type: 'string', enum: ['SUPPORT', 'MODERATEUR', 'SUPER_ADMIN'] },
+            },
+          },
+        },
+        required: ['id', 'telephone', 'role', 'statut', 'createdAt', 'updatedAt'],
+      },
+      AdminUserListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          items: { type: 'array', items: { $ref: '#/components/schemas/AdminUserItem' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+        },
+        required: ['success', 'items', 'total', 'page', 'limit'],
+      },
+      AdminUserDetailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          user: { $ref: '#/components/schemas/AdminUserItem' },
+        },
+        required: ['success', 'user'],
+      },
+      AdminUserCreateRequest: {
+        type: 'object',
+        properties: {
+          role: { type: 'string', enum: ['ACHETEUR', 'ARTISAN', 'ADMIN'] },
+          nom: { type: 'string', example: 'Awa Mensah' },
+          email: { type: 'string', format: 'email', example: 'awa@example.com' },
+          telephone: { type: 'string', example: '+22890123456' },
+          motDePasse: { type: 'string', format: 'password', minLength: 8, maxLength: 128 },
+          statut: {
+            type: 'string',
+            enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'],
+          },
+          niveauAcces: { type: 'string', enum: ['SUPPORT', 'MODERATEUR', 'SUPER_ADMIN'] },
+          artisanProfile: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['ARTISAN', 'ARTISTE'] },
+              nomAtelier: { type: 'string' },
+              specialite: { type: 'string' },
+              localisation: { type: 'string' },
+              biographie: { type: 'string' },
+              anneesExperience: { type: 'integer' },
+            },
+          },
+          buyerProfile: {
+            type: 'object',
+            properties: {
+              adresseLivraison: { type: 'string' },
+              typeClient: { type: 'string', enum: ['PARTICULIER', 'PROFESSIONNEL', 'COLLECTIONNEUR'] },
+              devise: { type: 'string' },
+              langue: { type: 'string' },
+            },
+          },
+        },
+        required: ['role', 'telephone', 'motDePasse'],
+      },
+      AdminUserStatusRequest: {
+        type: 'object',
+        properties: {
+          statut: {
+            type: 'string',
+            enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'],
+          },
+        },
+        required: ['statut'],
+      },
+      AdminUserRoleRequest: {
+        type: 'object',
+        properties: {
+          role: { type: 'string', enum: ['ACHETEUR', 'ARTISAN', 'ADMIN'] },
+          niveauAcces: { type: 'string', enum: ['SUPPORT', 'MODERATEUR', 'SUPER_ADMIN'] },
+        },
+        required: ['role'],
+      },
       AuthOtpSendRequest: {
         type: 'object',
         properties: {
@@ -884,7 +2466,11 @@ export const swaggerDocument = {
         type: 'object',
         properties: {
           role: { type: 'string', enum: ['ACHETEUR', 'ARTISAN'], example: 'ACHETEUR' },
-          nom: { type: 'string', description: 'Buyer name or artisan atelier name', example: 'Awa Mensah' },
+          nom: {
+            type: 'string',
+            description: 'Buyer name or artisan atelier name',
+            example: 'Awa Mensah',
+          },
           telephone: { type: 'string', example: '+22890123456' },
           email: { type: 'string', format: 'email', example: 'user@example.com' },
           specialite: {
@@ -937,6 +2523,50 @@ export const swaggerDocument = {
           },
         },
         required: ['id', 'telephone', 'role', 'statut', 'telephoneVerificationStatus'],
+      },
+      CreateCommandeRequest: {
+        type: 'object',
+        properties: {
+          articles: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                oeuvreId: { type: 'string', format: 'uuid' },
+                quantite: { type: 'integer', minimum: 1, maximum: 100 },
+              },
+              required: ['oeuvreId', 'quantite'],
+            },
+          },
+          adresseLivraison: { type: 'string', example: 'Lomé, Tokoin, Rue 12' },
+          transporteur: { type: 'string', example: 'DHL Express' },
+          fraisLivraison: { type: 'number', minimum: 0, default: 0 },
+          methodePaiement: {
+            type: 'string',
+            enum: ['CARTE_BANCAIRE', 'MOBILE_MONEY', 'VIREMENT', 'ESPECES'],
+          },
+        },
+        required: ['articles', 'adresseLivraison', 'transporteur', 'methodePaiement'],
+        additionalProperties: false,
+      },
+      StatutCommandeRequest: {
+        type: 'object',
+        properties: {
+          statut: {
+            type: 'string',
+            enum: [
+              'COMMANDE',
+              'PREPARATION',
+              'EXPEDIEE',
+              'LIVREE',
+              'CLOTUREE',
+              'ANNULEE',
+              'REMBOURSEE',
+            ],
+          },
+        },
+        required: ['statut'],
+        additionalProperties: false,
       },
       Kyc: {
         type: 'object',
@@ -1010,6 +2640,101 @@ export const swaggerDocument = {
           },
         },
         required: ['success', 'error'],
+      },
+      OeuvreCreateRequest: {
+        type: 'object',
+        properties: {
+          artisanId: { type: 'string', format: 'uuid', example: 'artisan-profile-uuid' },
+          titre: { type: 'string', maxLength: 200, example: 'Sculpture sur bois' },
+          description: { type: 'string', example: 'Une sculpture réalisée à la main' },
+          technique: { type: 'string', example: 'Main' },
+          materiaux: { type: 'string', example: 'Bois, peinture' },
+          dimensions: { type: 'string', example: '30x40x10 cm' },
+          poids: { type: 'number', example: 2.5 },
+          anneeCreation: { type: 'integer', example: 2023 },
+          prixXOF: { type: 'integer', minimum: 0, example: 50000 },
+          categorieId: { type: 'string', format: 'uuid' },
+        },
+        required: ['artisanId', 'titre', 'description', 'prixXOF', 'categorieId'],
+        additionalProperties: false,
+      },
+      OeuvreUpdateRequest: {
+        type: 'object',
+        properties: {
+          titre: { type: 'string', maxLength: 200 },
+          description: { type: 'string' },
+          technique: { type: 'string' },
+          materiaux: { type: 'string' },
+          dimensions: { type: 'string' },
+          poids: { type: 'number' },
+          anneeCreation: { type: 'integer' },
+          prixXOF: { type: 'integer', minimum: 0 },
+          categorieId: { type: 'string', format: 'uuid' },
+        },
+        additionalProperties: false,
+      },
+      OeuvreReorderMediasRequest: {
+        type: 'object',
+        properties: {
+          mediaIds: {
+            type: 'array',
+            items: { type: 'string', format: 'uuid' },
+            minItems: 1,
+            maxItems: 10,
+          },
+        },
+        required: ['mediaIds'],
+        additionalProperties: false,
+      },
+      ArticleCreateRequest: {
+        type: 'object',
+        properties: {
+          titre: { type: 'string', maxLength: 255 },
+          contenu: { type: 'string' },
+          metaDescription: { type: 'string', maxLength: 500 },
+          categorieId: { type: 'string', format: 'uuid' },
+        },
+        required: ['titre', 'contenu', 'categorieId'],
+        additionalProperties: false,
+      },
+      ArticleUpdateRequest: {
+        type: 'object',
+        properties: {
+          titre: { type: 'string', maxLength: 255 },
+          contenu: { type: 'string' },
+          metaDescription: { type: 'string', maxLength: 500 },
+          categorieId: { type: 'string', format: 'uuid' },
+        },
+        additionalProperties: false,
+      },
+      ArticleScheduleRequest: {
+        type: 'object',
+        properties: {
+          datePlanification: { type: 'string', format: 'date-time' },
+        },
+        required: ['datePlanification'],
+        additionalProperties: false,
+      },
+      Article: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          titre: { type: 'string' },
+          contenu: { type: 'string' },
+          slug: { type: 'string' },
+          metaDescription: { type: 'string', nullable: true },
+          statut: { type: 'string', enum: ['BROUILLON', 'PLANIFIE', 'PUBLIE'] },
+          datePublication: { type: 'string', format: 'date-time', nullable: true },
+          datePlanification: { type: 'string', format: 'date-time', nullable: true },
+          categorieId: { type: 'string', format: 'uuid' },
+          imageCouvertureUrl: { type: 'string', nullable: true },
+          imageCouverturePublicId: { type: 'string', nullable: true },
+          auteurId: { type: 'string', format: 'uuid' },
+          publishedByAdminId: { type: 'string', format: 'uuid', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+        required: ['id', 'titre', 'contenu', 'slug', 'statut', 'categorieId', 'auteurId', 'createdAt', 'updatedAt'],
       },
     },
   },

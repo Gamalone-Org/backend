@@ -1,6 +1,6 @@
 import type { UploadApiOptions, UploadApiResponse } from 'cloudinary';
 
-export const CLOUDINARY_DOMAINS = ['kyc', 'media', 'users', 'artworks'] as const;
+export const CLOUDINARY_DOMAINS = ['kyc', 'media', 'users', 'artworks', 'articles'] as const;
 export type CloudinaryDomain = (typeof CLOUDINARY_DOMAINS)[number];
 export type CloudinaryResourceType = 'image' | 'raw' | 'video' | 'auto';
 

@@ -66,6 +66,52 @@ export async function runKycPurgeJob(): Promise<KycPurgeResult> {
   return purgeService.runPurge();
 }
 
+export type KycPurgeBoundedResult = {
+  batches: number;
+  totals: KycPurgeResult;
+};
+
+/**
+ * Runs the purge repeatedly (one batch per iteration) for the Vercel Cron
+ * entrypoint, which must complete inside a single serverless invocation.
+ * Processing stays within `maxBatches` batches and `timeBudgetMs`, so a large
+ * backlog is drained across successive cron runs instead of in one
+ * long-running call that could hit the function timeout.
+ */
+export async function runKycPurgeBounded(
+  options: { maxBatches?: number; timeBudgetMs?: number } = {}
+): Promise<KycPurgeBoundedResult> {
+  const { prisma } = await import('../../config/database.js');
+  const privacyRepository = new KycPrivacyRepository(prisma);
+  const privacyService = new KycPrivacyService(privacyRepository);
+  const purgeService = new KycPurgeService(privacyRepository, privacyService);
+
+  const maxBatches = options.maxBatches ?? 20;
+  const timeBudgetMs = options.timeBudgetMs ?? 8_000;
+  const startedAt = Date.now();
+  const totals: KycPurgeResult = { scanned: 0, anonymized: 0, skipped: 0, failed: 0 };
+  let batches = 0;
+
+  for (let i = 0; i < maxBatches; i += 1) {
+    if (Date.now() - startedAt >= timeBudgetMs) {
+      break;
+    }
+
+    const batch = await purgeService.runPurge();
+    batches += 1;
+    totals.scanned += batch.scanned;
+    totals.anonymized += batch.anonymized;
+    totals.skipped += batch.skipped;
+    totals.failed += batch.failed;
+
+    if (batch.scanned === 0) {
+      break;
+    }
+  }
+
+  return { batches, totals };
+}
+
 export type PurgeSchedulerStop = () => void;
 
 export interface PurgeScheduler {
