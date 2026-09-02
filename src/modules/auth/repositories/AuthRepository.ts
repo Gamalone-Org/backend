@@ -5,6 +5,7 @@ import {
   type UserRole,
   type UserStatus,
   type PhoneVerificationStatus,
+  type ArtisanType,
 } from '../../../generated/prisma/client.js';
 
 export type CreateUserWithCredentialsInput = {
@@ -14,11 +15,15 @@ export type CreateUserWithCredentialsInput = {
   motDePasseHash: string;
   role: UserRole;
   artisanProfile?: {
+    type?: ArtisanType;
     nomAtelier: string;
     specialite: string;
     localisation: string;
     biographie: string;
     anneesExperience: number;
+  } | null;
+  buyerProfile?: {
+    adresseLivraison?: string;
   } | null;
 };
 
@@ -61,11 +66,25 @@ export class AuthRepository {
         await tx.artisanProfile.create({
           data: {
             userId: user.id,
+            type: data.artisanProfile!.type ?? 'ARTISAN',
             nomAtelier: data.artisanProfile!.nomAtelier,
             specialite: data.artisanProfile!.specialite,
             localisation: data.artisanProfile!.localisation,
             biographie: data.artisanProfile!.biographie,
             anneesExperience: data.artisanProfile!.anneesExperience,
+          },
+        });
+        return user;
+      });
+    }
+
+    if (data.role === 'ACHETEUR' && data.buyerProfile) {
+      return this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({ data: userData });
+        await tx.buyerProfile.create({
+          data: {
+            userId: user.id,
+            adresseLivraison: data.buyerProfile!.adresseLivraison ?? '',
           },
         });
         return user;

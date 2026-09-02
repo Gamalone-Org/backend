@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ArtisanType } from '../../generated/prisma/client.js';
 
 const telephoneSchema = z.string().trim().min(1, 'Phone number is required');
 
@@ -26,6 +27,7 @@ export const registerSchema = z.discriminatedUnion('role', [
     .object({
       role: z.literal('ARTISAN'),
       nom: nomSchema,
+      type: z.nativeEnum(ArtisanType).default(ArtisanType.ARTISAN),
       specialite: z.string().trim().min(1, 'Specialite is required').max(120),
       localisation: z.string().trim().min(1, 'Localisation is required').max(255),
       ...registerBase,

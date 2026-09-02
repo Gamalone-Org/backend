@@ -30,14 +30,22 @@ const allowedOrigins = new Set(
   })
 );
 const corsOptions = {
-  origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+  origin: (
+    origin: string | undefined,
+    callback: (error: Error | null, allow?: boolean) => void
+  ) => {
     const normalizedOrigin = origin && origin !== 'null' ? origin.replace(/\/+$/, '') : '';
 
-    if (!origin || origin === 'null' || allowedOrigins.has(normalizedOrigin) || isAllowedOrigin(origin, {
-      NODE_ENV: env.NODE_ENV,
-      API_PUBLIC_URL: env.API_PUBLIC_URL,
-      CORS_ORIGINS: env.CORS_ORIGINS,
-    })) {
+    if (
+      !origin ||
+      origin === 'null' ||
+      allowedOrigins.has(normalizedOrigin) ||
+      isAllowedOrigin(origin, {
+        NODE_ENV: env.NODE_ENV,
+        API_PUBLIC_URL: env.API_PUBLIC_URL,
+        CORS_ORIGINS: env.CORS_ORIGINS,
+      })
+    ) {
       callback(null, true);
       return;
     }
@@ -62,10 +70,20 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Request logging
+// The default pino-http serializer logs the full req headers (Authorization:
+// Bearer JWT, cookies, API keys) and client IPs. Those are sensitive PII for a
+// serverless platform, so we only log method/url/requestId.
 app.use(
   pinoHttp({
     autoLogging: env.NODE_ENV !== 'test',
     level: env.NODE_ENV === 'test' ? 'silent' : 'info',
+    serializers: {
+      req: (req) => ({
+        id: (req as { id?: unknown }).id,
+        method: (req as { method?: string }).method,
+        url: (req as { url?: string }).url,
+      }),
+    },
   })
 );
 

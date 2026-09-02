@@ -3,8 +3,11 @@ import { z } from 'zod';
 const defaultDatabaseUrl = 'postgresql://postgres:postgres@localhost:5432/gamalone_backend';
 const defaultDevJwtSecret = '12345678901234567890123456789012';
 
-const smsProviderSchema = z.enum(['mock', 'twilio', 'messagebird', 'afriksms', 'custom']).default('mock');
-const defaultCorsOrigins = 'http://localhost:5000,http://localhost:3000,http://localhost:5173,http://localhost:4173';
+const smsProviderSchema = z
+  .enum(['mock', 'twilio', 'messagebird', 'afriksms', 'custom'])
+  .default('mock');
+const defaultCorsOrigins =
+  'http://localhost:5000,http://localhost:3000,http://localhost:5173,http://localhost:4173';
 const corsOriginsSchema = z
   .string()
   .default(defaultCorsOrigins)
@@ -35,6 +38,7 @@ const EnvSchema = z
     KYC_RETENTION_DAYS: z.coerce.number().int().positive().max(3650).default(365),
     KYC_SIGNED_URL_TTL: z.coerce.number().int().positive().max(3600).default(900),
     CORS_ORIGINS: corsOriginsSchema,
+    CRON_SECRET: z.string().optional(),
     SMS_PROVIDER: smsProviderSchema,
     SMS_CLIENT_ID: z.string().optional(),
     SMS_FROM: z.string().optional(),
@@ -85,7 +89,8 @@ const EnvSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['CLOUDINARY_CLOUD_NAME'],
-        message: 'Cloudinary configuration (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) is required in production',
+        message:
+          'Cloudinary configuration (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) is required in production',
       });
     }
 
@@ -140,8 +145,7 @@ function parseEnv(): EnvType {
     API_PUBLIC_URL: process.env['API_PUBLIC_URL'] ?? 'http://localhost:5000',
     DATABASE_URL: process.env['DATABASE_URL'] ?? defaultDatabaseUrl,
     JWT_SECRET:
-      process.env['JWT_SECRET'] ??
-      (nodeEnv === 'production' ? undefined : defaultDevJwtSecret),
+      process.env['JWT_SECRET'] ?? (nodeEnv === 'production' ? undefined : defaultDevJwtSecret),
     JWT_EXPIRES_IN: process.env['JWT_EXPIRES_IN'] ?? '7d',
     REDIS_URL: process.env['REDIS_URL'],
     CLOUDINARY_CLOUD_NAME: process.env['CLOUDINARY_CLOUD_NAME'],
@@ -160,6 +164,7 @@ function parseEnv(): EnvType {
     SMS_AUTH_TOKEN: process.env['SMS_AUTH_TOKEN'],
     SMS_BASE_URL: process.env['SMS_BASE_URL'],
     SMS_TIMEOUT_MS: process.env['SMS_TIMEOUT_MS'],
+    CRON_SECRET: process.env['PURGE_CRON_SECRET'] ?? process.env['CRON_SECRET'],
     OTP_TTL_SECONDS: process.env['OTP_TTL_SECONDS'],
     OTP_MAX_ATTEMPTS: process.env['OTP_MAX_ATTEMPTS'],
     OTP_COOLDOWN_SECONDS: process.env['OTP_COOLDOWN_SECONDS'],
@@ -171,8 +176,12 @@ function parseEnv(): EnvType {
   const result = EnvSchema.safeParse(env);
 
   if (!result.success) {
-    console.error('Invalid environment variables:', result.error.flatten());
-    process.exit(1);
+    // Throw (rather than process.exit) so serverless runtimes surface the
+    // misconfiguration as a startup failure instead of silently killing the
+    // invocation mid-request.
+    throw new Error(
+      `Invalid environment variables:\n${JSON.stringify(result.error.flatten(), null, 2)}`
+    );
   }
 
   return result.data;

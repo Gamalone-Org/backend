@@ -16,5 +16,11 @@
       "src": "/(.*)",
       "dest": "src/vercel.ts"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/v1/internal/kyc/purge/cron",
+      "schedule": "0 3 * * *"
+    }
   ]
 }
