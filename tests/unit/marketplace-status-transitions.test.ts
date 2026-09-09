@@ -20,6 +20,7 @@ function buildService(overrides = {}) {
   const repository = {
     findArtisanProfileById: vi.fn(),
     findArtisanProfileByUserId: vi.fn(),
+    findKycValidForUser: vi.fn(),
     findCategorieById: vi.fn(),
     findById: vi.fn(),
     findByIdPublic: vi.fn(),
@@ -55,6 +56,8 @@ describe('OeuvreService status transitions', () => {
     const { service, repository } = buildService();
     repository.findAdminProfileByUserId.mockResolvedValue({ id: 'admin-profile-1' });
     repository.findById.mockResolvedValue(buildOeuvre({ statut: 'BROUILLON' }));
+    repository.findArtisanProfileById.mockResolvedValue({ id: 'artisan-1', user: { id: 'user-1', role: 'ARTISAN', statut: 'ACTIF' } });
+    repository.findKycValidForUser.mockResolvedValue({ id: 'kyc-1', status: 'VALIDE' });
     repository.countMedias.mockResolvedValue(1);
     repository.publish.mockResolvedValue(buildOeuvre({ statut: 'PUBLIEE' }));
 
@@ -67,6 +70,8 @@ describe('OeuvreService status transitions', () => {
     const { service, repository } = buildService();
     repository.findAdminProfileByUserId.mockResolvedValue({ id: 'admin-profile-1' });
     repository.findById.mockResolvedValue(buildOeuvre({ statut: 'EN_ATTENTE_VALIDATION' }));
+    repository.findArtisanProfileById.mockResolvedValue({ id: 'artisan-1', user: { id: 'user-1', role: 'ARTISAN', statut: 'ACTIF' } });
+    repository.findKycValidForUser.mockResolvedValue({ id: 'kyc-1', status: 'VALIDE' });
     repository.countMedias.mockResolvedValue(1);
     repository.publish.mockResolvedValue(buildOeuvre({ statut: 'PUBLIEE' }));
 
@@ -87,6 +92,8 @@ describe('OeuvreService status transitions', () => {
     const { service, repository } = buildService();
     repository.findAdminProfileByUserId.mockResolvedValue({ id: 'admin-profile-1' });
     repository.findById.mockResolvedValue(buildOeuvre({ statut: 'BROUILLON' }));
+    repository.findArtisanProfileById.mockResolvedValue({ id: 'artisan-1', user: { id: 'user-1', role: 'ARTISAN', statut: 'ACTIF' } });
+    repository.findKycValidForUser.mockResolvedValue({ id: 'kyc-1', status: 'VALIDE' });
     repository.countMedias.mockResolvedValue(0);
 
     await expect(service.publishOeuvre('admin-user-1', 'oeuvre-1')).rejects.toThrow(ConflictError);
@@ -116,7 +123,9 @@ describe('OeuvreService status transitions', () => {
     expect(VALID_STATUS_TRANSITIONS['EN_ATTENTE_VALIDATION']).toContain('PUBLIEE');
     expect(VALID_STATUS_TRANSITIONS['EN_ATTENTE_VALIDATION']).toContain('BROUILLON');
     expect(VALID_STATUS_TRANSITIONS.PUBLIEE).toContain('RETIREE');
-    expect(VALID_STATUS_TRANSITIONS.PUBLIEE).toContain('VENDUE');
+    expect(VALID_STATUS_TRANSITIONS.PUBLIEE).toContain('EN_PANIER');
+    expect(VALID_STATUS_TRANSITIONS.EN_PANIER).toContain('PUBLIEE');
+    expect(VALID_STATUS_TRANSITIONS.EN_PANIER).toContain('VENDUE');
     expect(VALID_STATUS_TRANSITIONS.VENDUE).toEqual([]);
     expect(VALID_STATUS_TRANSITIONS.RETIREE).toEqual([]);
   });

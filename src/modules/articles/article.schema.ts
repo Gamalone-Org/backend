@@ -43,6 +43,7 @@ export const articleIdParamsSchema = z.object({
 
 const pageSchema = z.coerce.number().int().min(1).default(1);
 const limitSchema = z.coerce.number().int().min(1).max(100).default(20);
+const dateQuerySchema = z.coerce.date();
 
 export const listArticlesQuerySchema = z
   .object({
@@ -50,10 +51,17 @@ export const listArticlesQuerySchema = z
     limit: limitSchema,
     statut: z.enum(ARTICLE_STATUSES).optional(),
     categorieId: z.string().uuid('Identifiant de catégorie invalide').optional(),
+    auteurId: z.string().uuid("Identifiant d'auteur invalide").optional(),
+    dateDebut: dateQuerySchema.optional(),
+    dateFin: dateQuerySchema.optional(),
     q: z.string().trim().max(255).optional(),
     tri: z.enum(['recent', 'plus_ancien', 'titre']).optional(),
   })
-  .strict();
+  .strict()
+  .refine((data) => !data.dateDebut || !data.dateFin || data.dateDebut <= data.dateFin, {
+    message: "dateDebut doit être antérieure ou égale à dateFin",
+    path: ['dateDebut'],
+  });
 
 export type CreateArticleInput = z.infer<typeof createArticleSchema>;
 export type UpdateArticleInput = z.infer<typeof updateArticleSchema>;

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ArticleService } from '../../src/modules/articles/article.service';
+import { ArticleService, CSV_EXPORT_LIMIT } from '../../src/modules/articles/article.service';
 import { ArticleRepository } from '../../src/modules/articles/article.repository';
+import { listArticlesQuerySchema } from '../../src/modules/articles/article.schema';
 import { ConflictError, NotFoundError, ValidationError } from '../../src/common/errors/AppError';
 import { Prisma } from '../../src/generated/prisma/client';
 
@@ -38,6 +39,7 @@ function buildService(overrides: Partial<ArticleRepository> = {}) {
     listArticles: vi.fn(),
     uploadImage: vi.fn(),
     deleteImage: vi.fn().mockResolvedValue(undefined),
+    findForExport: vi.fn(),
     ...overrides,
   } as unknown as ArticleRepository;
   const service = new ArticleService(repository);
@@ -530,5 +532,148 @@ describe('ArticleService - récupération', () => {
     repository.findArticleById.mockResolvedValue(null);
 
     await expect(service.getArticle('missing')).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe('ArticleService - export CSV', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const csvArticle = (overrides: Record<string, unknown> = {}) => ({
+    id: 'id-1',
+    titre: 'Titre',
+    contenu: 'Contenu',
+    slug: 'titre',
+    statut: 'BROUILLON',
+    metaDescription: null,
+    categorie: { nom: 'Savoir-faire' },
+    auteur: { user: { id: 'u1', nom: 'Awa Koffi' } },
+    imageCouvertureUrl: null,
+    datePublication: null,
+    datePlanification: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    ...overrides,
+  });
+
+  it('delegates the filters to findForExport and caps the export at 5000 rows', async () => {
+    const { service, repository } = buildService();
+    repository.findForExport.mockResolvedValue([]);
+
+    const filters = {
+      page: 1,
+      limit: 20,
+      q: 'cire',
+      statut: 'PUBLIE' as const,
+      auteurId: '123e4567-e89b-12d3-a456-426614174002',
+      dateDebut: new Date('2026-01-01T00:00:00.000Z'),
+      dateFin: new Date('2026-12-31T23:59:59.999Z'),
+    };
+
+    await service.exportCsv(filters);
+
+    expect(repository.findForExport).toHaveBeenCalledWith(filters, CSV_EXPORT_LIMIT);
+    expect(CSV_EXPORT_LIMIT).toBe(5000);
+  });
+
+  it('emits the expected CSV header', async () => {
+    const { service, repository } = buildService();
+    repository.findForExport.mockResolvedValue([]);
+
+    const csv = await service.exportCsv({ page: 1, limit: 20 });
+
+    expect(csv.split('\n')[0]).toBe(
+      '"id","titre","categorie","auteur","statut","slug","metaDescription","imageCouvertureUrl","datePublication","datePlanification","dateCreation"'
+    );
+  });
+
+  it('quoting keeps commas inside a cell intact', async () => {
+    const { service, repository } = buildService();
+    repository.findForExport.mockResolvedValue([
+      csvArticle({ titre: 'Art, technique et matière', slug: 'art-technique' }),
+    ]);
+
+    const csv = await service.exportCsv({ page: 1, limit: 20 });
+    const row = csv.split('\n')[1];
+    expect(row).toContain('"Art, technique et matière"');
+  });
+
+  it('escapes double quotes by doubling them', async () => {
+    const { service, repository } = buildService();
+    repository.findForExport.mockResolvedValue([
+      csvArticle({ titre: 'La sculpture et "le bronze"' }),
+    ]);
+
+    const csv = await service.exportCsv({ page: 1, limit: 20 });
+    const row = csv.split('\n')[1];
+    expect(row).toContain('"La sculpture et ""le bronze"""');
+  });
+
+  it('turns null values into empty cells', async () => {
+    const { service, repository } = buildService();
+    repository.findForExport.mockResolvedValue([csvArticle()]);
+
+    const csv = await service.exportCsv({ page: 1, limit: 20 });
+    const row = csv.split('\n')[1];
+    const cells = row.split('","');
+    expect(cells[6]).toBe(''); // metaDescription
+    expect(cells[7]).toBe(''); // imageCouvertureUrl
+    expect(cells[8]).toBe(''); // datePublication
+    expect(cells[9]).toBe(''); // datePlanification
+  });
+
+  it('formats publication and creation dates as ISO strings', async () => {
+    const { service, repository } = buildService();
+    repository.findForExport.mockResolvedValue([
+      csvArticle({
+        statut: 'PUBLIE',
+        datePublication: new Date('2026-06-15T10:00:00.000Z'),
+        datePlanification: new Date('2026-06-20T10:00:00.000Z'),
+      }),
+    ]);
+
+    const csv = await service.exportCsv({ page: 1, limit: 20 });
+    const row = csv.split('\n')[1];
+    expect(row).toContain('2026-06-15T10:00:00.000Z');
+    expect(row).toContain('2026-06-20T10:00:00.000Z');
+    expect(row).toContain('2026-01-01T00:00:00.000Z');
+  });
+});
+
+describe('ArticleService - validation dateDebut/dateFin', () => {
+  it('accepts a valid date range', () => {
+    const result = listArticlesQuerySchema.parse({
+      dateDebut: '2026-01-01T00:00:00.000Z',
+      dateFin: '2026-12-31T23:59:59.999Z',
+    });
+    expect(result.dateDebut?.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    expect(result.dateFin?.toISOString()).toBe('2026-12-31T23:59:59.999Z');
+  });
+
+  it('rejects dateDebut after dateFin', () => {
+    expect(() =>
+      listArticlesQuerySchema.parse({
+        dateDebut: '2026-12-31T23:59:59.999Z',
+        dateFin: '2026-01-01T00:00:00.000Z',
+      })
+    ).toThrow();
+  });
+
+  it('accepts dateDebut equal to dateFin', () => {
+    const result = listArticlesQuerySchema.parse({
+      dateDebut: '2026-06-15T10:00:00.000Z',
+      dateFin: '2026-06-15T10:00:00.000Z',
+    });
+    expect(result.dateDebut?.toISOString()).toBe(result.dateFin?.toISOString());
+  });
+
+  it('accepts a single bound', () => {
+    const result = listArticlesQuerySchema.parse({ dateDebut: '2026-01-01T00:00:00.000Z' });
+    expect(result.dateDebut?.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+    expect(result.dateFin).toBeUndefined();
+  });
+
+  it('rejects an invalid date string', () => {
+    expect(() => listArticlesQuerySchema.parse({ dateDebut: 'not-a-date' })).toThrow();
   });
 });

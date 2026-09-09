@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserRepository } from '../../src/modules/users/users.repository.js';
+import { CSV_EXPORT_LIMIT } from '../../src/modules/users/users.service.js';
 
 function createTxMock() {
   return {
@@ -214,5 +215,44 @@ describe('UserRepository - changement de rôle transactionnel', () => {
     await repository.changeRole(USER_ID, 'ACHETEUR', undefined, false);
     expect(mockTx.adminProfile.create).not.toHaveBeenCalled();
     expect(mockTx.adminProfile.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('UserRepository - export CSV (plafond 5000, sans pagination)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('interroge sans skip et borne à CSV_EXPORT_LIMIT', async () => {
+    const { repository, prisma } = buildRepository();
+    prisma.user.findMany.mockResolvedValue([prismaUser]);
+
+    await repository.findForExport(
+      {
+        q: 'awa',
+        role: 'ACHETEUR',
+        statut: 'SUSPENDU',
+        bloques: true,
+      },
+      CSV_EXPORT_LIMIT
+    );
+
+    const args = prisma.user.findMany.mock.calls[0][0];
+    expect(args.skip).toBeUndefined();
+    expect(args.take).toBe(CSV_EXPORT_LIMIT);
+    expect(args.where).toEqual(
+      expect.objectContaining({ deletedAt: null, role: 'ACHETEUR', statut: 'SUSPENDU' })
+    );
+    expect(prisma.user.count).not.toHaveBeenCalled();
+  });
+
+  it('n’expose jamais le motDePasse dans le détail (select sécurisé)', async () => {
+    const { repository, prisma } = buildRepository();
+    prisma.user.findFirst.mockResolvedValue(prismaUser);
+
+    await repository.findById(USER_ID);
+
+    const select = prisma.user.findFirst.mock.calls[0][0].select;
+    expect(select).not.toHaveProperty('motDePasse');
   });
 });

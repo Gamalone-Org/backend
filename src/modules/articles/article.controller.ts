@@ -38,10 +38,37 @@ export class ArticleController {
         limit: query.limit ?? 20,
         statut: query.statut,
         categorieId: query.categorieId,
+        auteurId: query.auteurId,
+        dateDebut: query.dateDebut,
+        dateFin: query.dateFin,
         q: query.q,
         tri: query.tri,
       });
       res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  exportArticles = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const query = listArticlesQuerySchema.parse(req.query);
+      const csv = await this.service.exportCsv({
+        page: query.page,
+        limit: query.limit,
+        statut: query.statut,
+        categorieId: query.categorieId,
+        auteurId: query.auteurId,
+        dateDebut: query.dateDebut,
+        dateFin: query.dateFin,
+        q: query.q,
+        tri: query.tri,
+      });
+      res
+        .status(200)
+        .setHeader('Content-Type', 'text/csv; charset=utf-8')
+        .setHeader('Content-Disposition', `attachment; filename="articles-${Date.now()}.csv"`)
+        .send(csv);
     } catch (error) {
       next(error);
     }

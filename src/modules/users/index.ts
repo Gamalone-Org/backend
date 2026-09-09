@@ -5,7 +5,7 @@ import { UserService } from './users.service.js';
 
 export { adminUserRouter } from './users.routes.js';
 export { UserRepository } from './users.repository.js';
-export { UserService } from './users.service.js';
+export { UserService, CSV_EXPORT_LIMIT } from './users.service.js';
 export { UserController } from './users.controller.js';
 
 export function createUserModule() {

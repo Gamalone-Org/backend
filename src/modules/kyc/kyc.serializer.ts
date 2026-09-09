@@ -4,6 +4,7 @@ import { ANONYMIZED_JSON_MARKER } from '../../config/kyc.js';
 type KycWithRelations = Kyc & {
   user?: {
     id: string;
+    nom?: string | null;
     telephone?: string | null;
     email?: string | null;
     role: string;
@@ -122,6 +123,7 @@ export function toAdminKycDetailDto(
     user: kyc.user
       ? {
           id: kyc.user.id,
+          nom: kyc.user.nom,
           role: kyc.user.role,
           statut: kyc.user.statut,
           telephoneVerificationStatus: kyc.user.telephoneVerificationStatus,

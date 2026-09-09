@@ -5,6 +5,7 @@ import { NotFoundError } from '../../src/common/errors/AppError';
 function buildService(overrides = {}) {
   const repository = {
     findArtisanProfileById: vi.fn(),
+    findKycValidForUser: vi.fn(),
     findCategorieById: vi.fn(),
     findById: vi.fn(),
     countMedias: vi.fn(),
@@ -37,7 +38,8 @@ describe('OeuvreService category integrity', () => {
 
   it('creates an oeuvre only when the categorie exists', async () => {
     const { service, repository } = buildService();
-    repository.findArtisanProfileById.mockResolvedValue({ id: 'artisan-1', user: { role: 'ARTISAN', statut: 'ACTIF' } });
+    repository.findArtisanProfileById.mockResolvedValue({ id: 'artisan-1', user: { id: 'user-1', role: 'ARTISAN', statut: 'ACTIF' } });
+    repository.findKycValidForUser.mockResolvedValue({ id: 'kyc-1', status: 'VALIDE' });
     repository.findCategorieById.mockResolvedValue({ id: 'cat-1', nom: 'Sculpture' });
     repository.create.mockResolvedValue({ id: 'oeuvre-1', categorieId: 'cat-1' });
 
@@ -48,7 +50,8 @@ describe('OeuvreService category integrity', () => {
 
   it('rejects creation with an unknown category', async () => {
     const { service, repository } = buildService();
-    repository.findArtisanProfileById.mockResolvedValue({ id: 'artisan-1', user: { role: 'ARTISAN', statut: 'ACTIF' } });
+    repository.findArtisanProfileById.mockResolvedValue({ id: 'artisan-1', user: { id: 'user-1', role: 'ARTISAN', statut: 'ACTIF' } });
+    repository.findKycValidForUser.mockResolvedValue({ id: 'kyc-1', status: 'VALIDE' });
     repository.findCategorieById.mockResolvedValue(null);
 
     await expect(service.createOeuvre('artisan-1', input)).rejects.toThrow(NotFoundError);

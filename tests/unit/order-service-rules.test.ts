@@ -132,6 +132,20 @@ describe('OrderService business rules', () => {
         { oeuvreId: OEUVRE_ID, artisanId: ARTISAN_ID, prixUnitaire: 10000, quantite: 2 },
         { oeuvreId: OEUVRE_2_ID, artisanId: ARTISAN_ID, prixUnitaire: 5000, quantite: 1 },
       ],
+      commandesArtisans: [
+        {
+          artisanId: ARTISAN_ID,
+          statut: 'COMMANDE',
+          sousTotal: 25000,
+          commission: 2500,
+          fraisLivraison: 2500,
+          montantTotal: 27500,
+          lignes: [
+            { oeuvreId: OEUVRE_ID, artisanId: ARTISAN_ID, prixUnitaire: 10000, quantite: 2 },
+            { oeuvreId: OEUVRE_2_ID, artisanId: ARTISAN_ID, prixUnitaire: 5000, quantite: 1 },
+          ],
+        },
+      ],
       sousTotal: 25000,
       fraisLivraison: 2500,
       montantTotal: 27500,

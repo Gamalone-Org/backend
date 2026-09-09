@@ -43,7 +43,15 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
 
   try {
     const payload = jwtService.verifyToken(token);
-    void authRepository.findById(payload.userId).then((user) => {
+    // NOTE: le code original utilisait void promise.then().then().catch() ce qui
+    // n'est PAS un pattern middleware Express fiable. Les callbacks .then()/.catch()
+    // appellent next() via des closures JS, pas via le flux middleware d'Express.
+    // Si findByPhone ou findAdminProfileByUserId lèvent une erreur non catchée
+    // (ex: Prisma connection lost), next() n'est jamais appelé et la requête pend.
+    // La solution async/await garantit que next(error) est toujours appelé en cas
+    // d'échec, et que next() est appelé exactement une fois dans tous les chemins.
+    void (async () => {
+      const user = await authRepository.findById(payload.userId);
       if (!user) {
         next(new UnauthorizedError('User not found'));
         return;
@@ -64,7 +72,8 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
       };
 
       if (user.role === 'ADMIN') {
-        void authRepository.findAdminProfileByUserId(user.id).then((adminProfile) => {
+        try {
+          const adminProfile = await authRepository.findAdminProfileByUserId(user.id);
           if (adminProfile) {
             req.user = {
               ...req.user!,
@@ -72,13 +81,19 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
               adminAccessLevel: adminProfile.niveauAcces,
             };
           }
-          next();
-        }).catch((error) => next(error));
-        return;
+        } catch (error) {
+          // Si la lecture du profil admin échoue, on continue quand même :
+          // l'utilisateur est authentifié, il aura juste les champs admin à null.
+          // Ceci évite de bloquer tous les endpoints admin si le profil est corrompu.
+          // eslint-disable-next-line no-console
+          console.error('Failed to load admin profile for user', user.id, error);
+        }
       }
 
       next();
-    }).catch((error) => next(error));
+    })().catch((error) => {
+      next(error instanceof Error ? error : new UnauthorizedError('Authentication failed'));
+    });
   } catch (error) {
     next(error instanceof Error ? error : new UnauthorizedError('Invalid token'));
   }

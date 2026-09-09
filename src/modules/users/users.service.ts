@@ -1,5 +1,5 @@
 import { AdminAccessLevel } from '../../generated/prisma/client.js';
-import { UserRepository, type ListUsersOptions } from './users.repository.js';
+import { UserRepository, type ExportUsersOptions, type ListUsersOptions } from './users.repository.js';
 import { PasswordService } from '../auth/services/PasswordService.js';
 import { PhoneService } from '../auth/services/PhoneService.js';
 import {
@@ -13,6 +13,8 @@ import type {
   UpdateUserRoleInput,
   UpdateUserStatutInput,
 } from './users.schema.js';
+
+export const CSV_EXPORT_LIMIT = 5000;
 
 export type Actor = {
   id: string;
@@ -29,7 +31,9 @@ export class UserService {
 
   async listUsers(actor: Actor, options: ListUsersOptions) {
     this.assertSupportOrAbove(actor);
-    return this.repository.listUsers(options);
+    const { items, total, page, limit } = await this.repository.listUsers(options);
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+    return { items, total, page, limit, totalPages };
   }
 
   async getById(actor: Actor, id: string) {
@@ -128,13 +132,13 @@ export class UserService {
     };
   }
 
-  async exportUsers(actor: Actor, options: ListUsersOptions): Promise<{ csv: string }> {
+  async exportUsers(actor: Actor, options: ExportUsersOptions): Promise<{ csv: string }> {
     this.assertSupportOrAbove(actor);
     return this.exportInternal(options);
   }
 
-  private async exportInternal(options: ListUsersOptions): Promise<{ csv: string }> {
-    const { items } = await this.repository.listUsers(options);
+  private async exportInternal(options: ExportUsersOptions): Promise<{ csv: string }> {
+    const items = await this.repository.findForExport(options, CSV_EXPORT_LIMIT);
 
     const headers = [
       'id',

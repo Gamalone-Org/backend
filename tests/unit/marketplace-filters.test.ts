@@ -8,6 +8,7 @@ function buildService(overrides = {}) {
     findPublishedByArtisan: vi.fn(),
     findArtisanProfileByUserId: vi.fn(),
     findByIdPublic: vi.fn(),
+    findAllAdmin: vi.fn(),
     ...overrides,
   } as any;
   return { service: new OeuvreService(repository), repository };
@@ -51,6 +52,39 @@ describe('OeuvreService public filters & pagination', () => {
         q: 'sculpture',
         tri: 'prixXOF_asc',
       },
+      select
+    );
+  });
+
+  it('passes a disponibilite filter through to the repository (public)', async () => {
+    const { service, repository } = buildService();
+    repository.findPublishedPublic.mockResolvedValue({ oeuvres: [], total: 0 });
+
+    await service.getPublishedPublic(1, 20, { disponibilite: 'SUR_COMMANDE' }, select);
+
+    expect(repository.findPublishedPublic).toHaveBeenCalledWith(
+      1,
+      20,
+      { disponibilite: 'SUR_COMMANDE' },
+      select
+    );
+  });
+
+  it('passes a disponibilite filter through to the repository (admin)', async () => {
+    const { service, repository } = buildService();
+    repository.findAllAdmin.mockResolvedValue({ oeuvres: [], total: 0 });
+
+    await service.getAllAdmin(
+      1,
+      20,
+      { statut: 'PUBLIEE', disponibilite: 'EN_EXPOSITION' },
+      select
+    );
+
+    expect(repository.findAllAdmin).toHaveBeenCalledWith(
+      1,
+      20,
+      { statut: 'PUBLIEE', disponibilite: 'EN_EXPOSITION' },
       select
     );
   });

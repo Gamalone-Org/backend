@@ -8,9 +8,20 @@ export type LigneToCreate = {
   quantite: number;
 };
 
+export type CommandeArtisanData = {
+  artisanId: string;
+  statut: OrderStatus;
+  sousTotal: number;
+  commission: number;
+  fraisLivraison: number;
+  montantTotal: number;
+  lignes: LigneToCreate[];
+};
+
 export type CreateCommandeData = {
   acheteurId: string;
   lignes: LigneToCreate[];
+  commandesArtisans: CommandeArtisanData[];
   sousTotal: number;
   fraisLivraison: number;
   montantTotal: number;
@@ -39,22 +50,80 @@ export class OrderRepository {
     });
   }
 
+  /**
+   * Crée une commande globale avec ses CommandeArtisan et lignes.
+   *
+   * ═══════════════════════════════════════════════════════════════════════════
+   * PROTECTION CONTRE LA RACE CONDITION (double vente)
+   * ═══════════════════════════════════════════════════════════════════════════
+   *
+   * Stratégie : UPDATE atomique avec condition sur le statut.
+   *
+   * Au lieu de:
+   *   1. SELECT (findMany) → vérifier PUBLIEE → créer commande → UPDATE VENDUE
+   *   (deux transactions peuvent lire PUBLIEE simultanément)
+   *
+   * On fait:
+   *   1. UPDATE oeuvres SET statut = 'EN_PANIER' WHERE id IN (...) AND statut = 'PUBLIEE'
+   *   2. Vérifier le nombre de lignes modifiées = nombre d'œuvres demandées
+   *   3. Si ce n'est pas le cas → rollback immédiat (aucune commande créée)
+   *
+   * Pourquoi c'est atomique:
+   *   - PostgreSQL applique un verrou EXCLUSIVE sur les lignes MATCHÉES pendant l'UPDATE
+   *   - Deux transactions concurrentes sur la même œuvre : la première obtient le verrou
+   *     et passe le statut à EN_PANIER. La seconde voit le verrou, attend, puis
+   *     constate que statut n'est plus PUBLIEE → 0 lignes modifiées → rollback.
+   *   - Aucun SELECT intermédiaire qui pourrait lire un état stale.
+   *   - Pas besoin de SELECT FOR UPDATE (qui nécessiterait raw SQL avec Prisma).
+   *
+   * NOTE : le statut intermédiaire EN_PANIER est appliqué ici pour la protection
+   * concurrence. Lorsque le vrai paiement sera implémenté, EN_PANIER → VENDUE
+   * ne se fera qu'après confirmation du paiement (Webhook/CinetPay callback).
+   * Si le paiement échoue, EN_PANIER → PUBLIEE (annulation/libération).
+   */
   async createCommande(data: CreateCommandeData) {
     return this.prisma.$transaction(async (tx) => {
+      // --- ÉTAPE 1 : Verrou atomique des œuvres ---
+      // UPDATE avec condition WHERE statut = 'PUBLIEE' garantit qu'aucune
+      // transaction concurrente ne peut réserver la même œuvre.
+      // Si une œuvre est déjà EN_PANIER ou VENDUE, le WHERE ne matche pas,
+      // 0 ligne est modifiée, et on rollback immédiatement.
+      const oeuvreIds = data.lignes.map((l) => l.oeuvreId);
+
+      const updateResult = await tx.$executeRaw`
+        UPDATE "oeuvres"
+        SET "statut" = 'EN_PANIER'::"ArtworkStatus",
+            "updatedAt" = NOW()
+        WHERE "id" = ANY(${oeuvreIds}::uuid[])
+          AND "statut" = 'PUBLIEE'::"ArtworkStatus"
+      `;
+
+      if (Number(updateResult) !== oeuvreIds.length) {
+        const reservedIds = oeuvreIds.slice(0, Number(updateResult));
+        const failedIds = oeuvreIds.slice(Number(updateResult));
+
+        // Rollback partiel : remettre les œuvres qui avaient été réservées
+        // dans cette transaction en PUBLIEE (annulation de la réservation).
+        if (reservedIds.length > 0) {
+          await tx.$executeRaw`
+            UPDATE "oeuvres"
+            SET "statut" = 'PUBLIEE'::"ArtworkStatus",
+                "updatedAt" = NOW()
+            WHERE "id" = ANY(${reservedIds}::uuid[])
+              AND "statut" = 'EN_PANIER'::"ArtworkStatus"
+          `;
+        }
+
+        throw new Error(`CONCURRENT_PURCHASE:${failedIds.join(',')}`);
+      }
+
+      // --- ÉTAPE 2 : Création de la commande globale ---
       const commande = await tx.commande.create({
         data: {
           acheteurId: data.acheteurId,
           montantTotal: data.montantTotal,
           commission: data.commission,
           fraisLivraison: data.fraisLivraison,
-          lignesCommande: {
-            create: data.lignes.map((ligne) => ({
-              oeuvreId: ligne.oeuvreId,
-              artisanId: ligne.artisanId,
-              prixUnitaire: ligne.prixUnitaire,
-              quantite: ligne.quantite,
-            })),
-          },
           paiement: {
             create: {
               montant: data.montantTotal,
@@ -74,12 +143,69 @@ export class OrderRepository {
         },
       });
 
+      // --- ÉTAPE 3 : Création des CommandeArtisan et de leurs lignes ---
+      for (const ca of data.commandesArtisans) {
+        const commandeArtisan = await tx.commandeArtisan.create({
+          data: {
+            commandeId: commande.id,
+            artisanId: ca.artisanId,
+            statut: ca.statut,
+            sousTotal: ca.sousTotal,
+            commission: ca.commission,
+            fraisLivraison: ca.fraisLivraison,
+            montantTotal: ca.montantTotal,
+          },
+        });
+
+        for (const ligne of ca.lignes) {
+          await tx.ligneCommande.create({
+            data: {
+              commandeId: commande.id,
+              commandeArtisanId: commandeArtisan.id,
+              oeuvreId: ligne.oeuvreId,
+              artisanId: ligne.artisanId,
+              prixUnitaire: ligne.prixUnitaire,
+              quantite: ligne.quantite,
+            },
+          });
+        }
+      }
+
+      // --- ÉTAPE 4 : Marquer les œuvres comme VENDUES ---
+      // Transition finale : EN_PANIER → VENDUE.
+      // NOTE : lorsque le paiement réel sera implémenté, cette transition
+      // ne se fera qu'après confirmation du webhook de paiement.
+      // Si le paiement échoue, la logique d'annulation fera EN_PANIER → PUBLIEE.
       await tx.oeuvre.updateMany({
-        where: { id: { in: data.lignes.map((ligne) => ligne.oeuvreId) } },
+        where: { id: { in: oeuvreIds } },
         data: { statut: 'VENDUE' },
       });
 
       return commande;
+    });
+  }
+
+  /**
+   * Libère les œuvres réservées (EN_PANIER) lorsqu'une commande est annulée
+   * ou qu'un paiement échoue.
+   *
+   * Remet les œuvres EN_PANIER en PUBLIEE pour les rendre à nouveau disponibles.
+   */
+  async releaseOeuvres(commandeId: string) {
+    const lignes = await this.prisma.ligneCommande.findMany({
+      where: { commandeId },
+      select: { oeuvreId: true },
+    });
+
+    const oeuvreIds = lignes.map((l) => l.oeuvreId);
+    if (oeuvreIds.length === 0) return;
+
+    await this.prisma.oeuvre.updateMany({
+      where: {
+        id: { in: oeuvreIds },
+        statut: 'EN_PANIER',
+      },
+      data: { statut: 'PUBLIEE' },
     });
   }
 
@@ -113,6 +239,7 @@ export class OrderRepository {
             id: true,
             prixUnitaire: true,
             quantite: true,
+            commandeArtisanId: true,
             oeuvre: {
               select: {
                 id: true,
@@ -125,6 +252,39 @@ export class OrderRepository {
                 id: true,
                 nomAtelier: true,
                 user: { select: { id: true, nom: true } },
+              },
+            },
+          },
+        },
+        commandesArtisans: {
+          select: {
+            id: true,
+            statut: true,
+            sousTotal: true,
+            commission: true,
+            fraisLivraison: true,
+            montantTotal: true,
+            createdAt: true,
+            updatedAt: true,
+            artisan: {
+              select: {
+                id: true,
+                nomAtelier: true,
+                user: { select: { id: true, nom: true } },
+              },
+            },
+            lignesCommande: {
+              select: {
+                id: true,
+                prixUnitaire: true,
+                quantite: true,
+                oeuvre: {
+                  select: {
+                    id: true,
+                    titre: true,
+                    categorie: { select: { id: true, nom: true } },
+                  },
+                },
               },
             },
           },
@@ -183,6 +343,7 @@ export class OrderRepository {
             id: true,
             prixUnitaire: true,
             quantite: true,
+            commandeArtisanId: true,
             oeuvre: {
               select: {
                 id: true,
@@ -195,6 +356,39 @@ export class OrderRepository {
                 id: true,
                 nomAtelier: true,
                 user: { select: { id: true, nom: true } },
+              },
+            },
+          },
+        },
+        commandesArtisans: {
+          select: {
+            id: true,
+            statut: true,
+            sousTotal: true,
+            commission: true,
+            fraisLivraison: true,
+            montantTotal: true,
+            createdAt: true,
+            updatedAt: true,
+            artisan: {
+              select: {
+                id: true,
+                nomAtelier: true,
+                user: { select: { id: true, nom: true } },
+              },
+            },
+            lignesCommande: {
+              select: {
+                id: true,
+                prixUnitaire: true,
+                quantite: true,
+                oeuvre: {
+                  select: {
+                    id: true,
+                    titre: true,
+                    categorie: { select: { id: true, nom: true } },
+                  },
+                },
               },
             },
           },
@@ -263,6 +457,11 @@ export class OrderRepository {
             some: { oeuvre: { titre: { contains: filters.q, mode: 'insensitive' } } },
           },
         },
+        {
+          commandesArtisans: {
+            some: { artisan: { user: { nom: { contains: filters.q, mode: 'insensitive' } } } },
+          },
+        },
       ];
     }
 
@@ -289,6 +488,22 @@ export class OrderRepository {
           lignesCommande: {
             select: {
               id: true,
+              commandeArtisanId: true,
+              artisan: {
+                select: {
+                  id: true,
+                  nomAtelier: true,
+                  user: { select: { nom: true } },
+                },
+              },
+            },
+          },
+          commandesArtisans: {
+            select: {
+              id: true,
+              statut: true,
+              sousTotal: true,
+              montantTotal: true,
               artisan: {
                 select: {
                   id: true,
@@ -332,7 +547,23 @@ export class OrderRepository {
             select: {
               id: true,
               quantite: true,
+              commandeArtisanId: true,
               oeuvre: { select: { id: true, titre: true } },
+              artisan: {
+                select: {
+                  id: true,
+                  nomAtelier: true,
+                  user: { select: { nom: true } },
+                },
+              },
+            },
+          },
+          commandesArtisans: {
+            select: {
+              id: true,
+              statut: true,
+              sousTotal: true,
+              montantTotal: true,
               artisan: {
                 select: {
                   id: true,

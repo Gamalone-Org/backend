@@ -33,6 +33,9 @@ export type ListArticlesOptions = {
   limit: number;
   statut?: ArticleStatus;
   categorieId?: string;
+  auteurId?: string;
+  dateDebut?: Date;
+  dateFin?: Date;
   q?: string;
   tri?: 'recent' | 'plus_ancien' | 'titre';
 };
@@ -100,14 +103,7 @@ export class ArticleRepository {
   }
 
   async listArticles(options: ListArticlesOptions) {
-    const where: Prisma.ArticleWhereInput = {
-      deletedAt: null,
-      ...(options.statut ? { statut: options.statut } : {}),
-      ...(options.categorieId ? { categorieId: options.categorieId } : {}),
-      ...(options.q
-        ? { OR: [{ titre: { contains: options.q, mode: 'insensitive' } }, { contenu: { contains: options.q, mode: 'insensitive' } }] }
-        : {}),
-    };
+    const where = this.buildWhere(options);
 
     const orderBy: Prisma.ArticleOrderByWithRelationInput[] =
       options.tri === 'plus_ancien'
@@ -132,6 +128,56 @@ export class ArticleRepository {
     ]);
 
     return { items, total, page: options.page, limit: options.limit };
+  }
+
+  async findForExport(options: ListArticlesOptions, limit: number) {
+    const where = this.buildWhere(options);
+
+    return this.prisma.article.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }],
+      take: limit,
+      include: {
+        categorie: true,
+        auteur: { include: { user: { select: { id: true, nom: true } } } },
+        publishedByAdmin: { include: { user: { select: { id: true, nom: true } } } },
+      },
+    });
+  }
+
+  private buildWhere(options: ListArticlesOptions): Prisma.ArticleWhereInput {
+    const where: Prisma.ArticleWhereInput = { deletedAt: null };
+
+    if (options.statut) {
+      where.statut = options.statut;
+    }
+
+    if (options.categorieId) {
+      where.categorieId = options.categorieId;
+    }
+
+    if (options.auteurId) {
+      where.auteurId = options.auteurId;
+    }
+
+    if (options.dateDebut || options.dateFin) {
+      where.createdAt = {
+        ...(options.dateDebut ? { gte: options.dateDebut } : {}),
+        ...(options.dateFin ? { lte: options.dateFin } : {}),
+      };
+    }
+
+    if (options.q) {
+      where.OR = [
+        { titre: { contains: options.q, mode: 'insensitive' } },
+        { contenu: { contains: options.q, mode: 'insensitive' } },
+        { slug: { contains: options.q, mode: 'insensitive' } },
+        { categorie: { nom: { contains: options.q, mode: 'insensitive' } } },
+        { auteur: { user: { nom: { contains: options.q, mode: 'insensitive' } } } },
+      ];
+    }
+
+    return where;
   }
 
   // --- Cloudinary ---

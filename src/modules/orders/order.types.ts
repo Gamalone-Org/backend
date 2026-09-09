@@ -27,6 +27,7 @@ export const commandeDetailedSelect = {
       id: true,
       prixUnitaire: true,
       quantite: true,
+      commandeArtisanId: true,
       oeuvre: {
         select: {
           id: true,
@@ -39,6 +40,39 @@ export const commandeDetailedSelect = {
           id: true,
           nomAtelier: true,
           user: { select: { id: true, nom: true } },
+        },
+      },
+    },
+  },
+  commandesArtisans: {
+    select: {
+      id: true,
+      statut: true,
+      sousTotal: true,
+      commission: true,
+      fraisLivraison: true,
+      montantTotal: true,
+      createdAt: true,
+      updatedAt: true,
+      artisan: {
+        select: {
+          id: true,
+          nomAtelier: true,
+          user: { select: { id: true, nom: true } },
+        },
+      },
+      lignesCommande: {
+        select: {
+          id: true,
+          prixUnitaire: true,
+          quantite: true,
+          oeuvre: {
+            select: {
+              id: true,
+              titre: true,
+              categorie: { select: { id: true, nom: true } },
+            },
+          },
         },
       },
     },

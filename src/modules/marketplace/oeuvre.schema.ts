@@ -13,6 +13,7 @@ const anneeCreationSchema = z
 const prixXofSchema = z.number().positive('Le prix doit être positif').max(999_999_999_999);
 const poidsSchema = z.number().positive('Le poids doit être positif').max(99999.99).optional();
 const categorieIdSchema = z.string().uuid('Invalid category id');
+const disponibiliteSchema = z.enum(['DISPONIBLE', 'SUR_COMMANDE', 'EN_EXPOSITION']);
 const pageSchema = z.coerce.number().int().min(1).default(1);
 const limitSchema = z.coerce.number().int().min(1).max(50).default(20);
 const uuidParam = z.string().uuid('Invalid id');
@@ -29,6 +30,7 @@ export const createOeuvreSchema = z
     anneeCreation: anneeCreationSchema,
     prixXOF: prixXofSchema,
     categorieId: categorieIdSchema,
+    disponibilite: disponibiliteSchema.default('DISPONIBLE'),
   })
   .strict();
 
@@ -44,6 +46,7 @@ export const updateOeuvreSchema = z
     prixXOF: prixXofSchema.optional(),
     categorieId: categorieIdSchema.optional(),
     estMiseEnAvant: z.boolean().optional(),
+    disponibilite: disponibiliteSchema.optional(),
   })
   .strict()
   .refine((data) => Object.keys(data).length > 0, {
@@ -89,6 +92,7 @@ export const publicOeuvreQuerySchema = z.object({
   artisanType: z.enum(['ARTISAN', 'ARTISTE']).optional(),
   localisation: z.string().trim().max(255).optional(),
   q: z.string().trim().max(255).optional(),
+  disponibilite: disponibiliteSchema.optional(),
   tri: z
     .enum([
       'prixXOF_asc',
@@ -114,6 +118,8 @@ export const adminOeuvresQuerySchema = z.object({
   statut: z.enum(['BROUILLON', 'EN_ATTENTE_VALIDATION', 'PUBLIEE', 'VENDUE', 'RETIREE']).optional(),
   artisanId: categorieIdSchema.optional(),
   categorieId: categorieIdSchema.optional(),
+  disponibilite: disponibiliteSchema.optional(),
+  q: z.string().trim().max(255).optional(),
 });
 
 export const featuredQuerySchema = z.object({

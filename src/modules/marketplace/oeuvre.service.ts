@@ -1,9 +1,10 @@
 import { OeuvreRepository } from './oeuvre.repository.js';
 import type { PublicOeuvreSelect, AdminOeuvreSelect } from './types.js';
-import type { ArtworkStatus } from '../../generated/prisma/client.js';
+import type { ArtworkAvailability, ArtworkStatus } from '../../generated/prisma/client.js';
 import { NotFoundError, ForbiddenError, ConflictError } from '../../common/errors/AppError.js';
 
 const ACTIVE_USER_STATUS = 'ACTIF';
+const MAX_EXPORT_ROWS = 5000;
 
 type OeuvreData = {
   titre: string;
@@ -15,6 +16,7 @@ type OeuvreData = {
   anneeCreation: number;
   prixXOF: number;
   categorieId: string;
+  disponibilite?: ArtworkAvailability;
 };
 
 export class OeuvreService {
@@ -30,6 +32,12 @@ export class OeuvreService {
     }
     if (profile.user.statut !== ACTIVE_USER_STATUS) {
       throw new ForbiddenError('Profil artisan inactif');
+    }
+    const validKyc = await this.repository.findKycValidForUser(profile.user.id);
+    if (!validKyc) {
+      throw new ForbiddenError(
+        "L'artisan doit avoir un KYC valide pour être associé à une œuvre"
+      );
     }
     return profile;
   }
@@ -88,6 +96,7 @@ export class OeuvreService {
       prixXOF?: number;
       categorieId?: string;
       estMiseEnAvant?: boolean;
+      disponibilite?: ArtworkAvailability;
     }
   ) {
     const oeuvre = await this.repository.findById(oeuvreId);
@@ -142,6 +151,8 @@ export class OeuvreService {
       throw new ConflictError('Seules les œuvres non publiées peuvent être publiées');
     }
 
+    await this.validateArtisan(oeuvre.artisanId);
+
     const mediaCount = await this.repository.countMedias(oeuvreId, 'OEUVRE');
     if (mediaCount === 0) {
       throw new ConflictError('Au moins une image est requise pour publier une œuvre');
@@ -172,10 +183,65 @@ export class OeuvreService {
       statut?: ArtworkStatus;
       artisanId?: string;
       categorieId?: string;
+      disponibilite?: ArtworkAvailability;
+      q?: string;
     },
     select: AdminOeuvreSelect
   ) {
     return this.repository.findAllAdmin(page, limit, filters, select);
+  }
+
+  async exportCsv(
+    filters: {
+      statut?: ArtworkStatus;
+      artisanId?: string;
+      categorieId?: string;
+      disponibilite?: ArtworkAvailability;
+      q?: string;
+    },
+    select: AdminOeuvreSelect
+  ) {
+    const { oeuvres } = await this.repository.findAllAdmin(1, MAX_EXPORT_ROWS, filters, select);
+
+    const headers = [
+      'identifiant',
+      'titre',
+      'artisan',
+      'categorie',
+      'technique',
+      'anneeCreation',
+      'prixXOF',
+      'statut',
+      'disponibilite',
+      'estMiseEnAvant',
+      'createdAt',
+    ];
+
+    const escape = (value: unknown): string => {
+      const str = value === null || value === undefined ? '' : String(value);
+      if (/[",\n]/.test(str)) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = oeuvres.map((oeuvre) =>
+      [
+        oeuvre.id,
+        escape(oeuvre.titre),
+        escape(oeuvre.artisan?.user?.nom || oeuvre.artisan?.nomAtelier || ''),
+        escape(oeuvre.categorie?.nom ?? ''),
+        escape(oeuvre.technique),
+        oeuvre.anneeCreation,
+        escape(oeuvre.prixXOF),
+        oeuvre.statut,
+        oeuvre.disponibilite,
+        oeuvre.estMiseEnAvant,
+        oeuvre.createdAt.toISOString(),
+      ].join(',')
+    );
+
+    return [headers.join(','), ...rows].join('\n');
   }
 
   async getOeuvreAdmin(oeuvreId: string) {
@@ -197,6 +263,7 @@ export class OeuvreService {
       localisation?: string;
       q?: string;
       tri?: string;
+      disponibilite?: ArtworkAvailability;
     },
     select: PublicOeuvreSelect
   ) {

@@ -197,6 +197,7 @@ export class KycRepository {
         user: {
           select: {
             id: true,
+            nom: true,
             telephone: true,
             email: true,
             role: true,
