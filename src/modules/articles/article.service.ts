@@ -17,6 +17,8 @@ const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const EDITABLE_STATUSES = new Set(['BROUILLON', 'PLANIFIE']);
 
+export const CSV_EXPORT_LIMIT = 5000;
+
 export class ArticleService {
   constructor(private readonly repository: ArticleRepository) {}
 
@@ -158,6 +160,44 @@ export class ArticleService {
 
   listArticles(options: ListArticlesOptions) {
     return this.repository.listArticles(options);
+  }
+
+  async exportCsv(options: ListArticlesOptions) {
+    const articles = await this.repository.findForExport(options, CSV_EXPORT_LIMIT);
+
+    const header = [
+      'id',
+      'titre',
+      'categorie',
+      'auteur',
+      'statut',
+      'slug',
+      'metaDescription',
+      'imageCouvertureUrl',
+      'datePublication',
+      'datePlanification',
+      'dateCreation',
+    ];
+
+    const rows = articles.map((a) => [
+      a.id,
+      a.titre,
+      a.categorie?.nom ?? '',
+      a.auteur?.user?.nom ?? '',
+      a.statut,
+      a.slug,
+      a.metaDescription ?? '',
+      a.imageCouvertureUrl ?? '',
+      a.datePublication ? new Date(a.datePublication).toISOString() : '',
+      a.datePlanification ? new Date(a.datePlanification).toISOString() : '',
+      new Date(a.createdAt).toISOString(),
+    ]);
+
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    return csv;
   }
 
   // --- private ---

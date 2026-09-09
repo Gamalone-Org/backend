@@ -46,6 +46,7 @@ export const adminOeuvreRouter = Router();
 adminOeuvreRouter.use(requireAuth, requireRole('ADMIN'));
 
 adminOeuvreRouter.get('/', requireAdminLevel('SUPPORT'), controller.listAllAdmin);
+adminOeuvreRouter.get('/export', requireAdminLevel('SUPPORT'), controller.exportCsv);
 adminOeuvreRouter.get('/:id', requireAdminLevel('SUPPORT'), controller.getOeuvreAdmin);
 adminOeuvreRouter.post('/', requireAdminLevel('MODERATEUR'), controller.create);
 adminOeuvreRouter.patch('/:id', requireAdminLevel('MODERATEUR'), controller.update);

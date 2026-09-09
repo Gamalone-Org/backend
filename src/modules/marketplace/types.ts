@@ -15,7 +15,8 @@ export const MEDIA_TYPE_LIMITS: Record<Extract<MediaType, 'OEUVRE' | 'PREPARATIO
 export const VALID_STATUS_TRANSITIONS: Record<ArtworkStatus, ArtworkStatus[]> = {
   BROUILLON: ['EN_ATTENTE_VALIDATION', 'PUBLIEE'],
   EN_ATTENTE_VALIDATION: ['BROUILLON', 'PUBLIEE'],
-  PUBLIEE: ['RETIREE', 'VENDUE'],
+  PUBLIEE: ['EN_PANIER', 'RETIREE'],
+  EN_PANIER: ['PUBLIEE', 'VENDUE'],
   VENDUE: [],
   RETIREE: [],
 };
@@ -31,6 +32,7 @@ export type PublicOeuvreSelect = {
   anneeCreation: true;
   prixXOF: true;
   statut: true;
+  disponibilite: true;
   estMiseEnAvant: true;
   createdAt: true;
   updatedAt: true;

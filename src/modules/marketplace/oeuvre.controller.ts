@@ -30,6 +30,7 @@ const publicSelect: PublicOeuvreSelect = {
   anneeCreation: true,
   prixXOF: true,
   statut: true,
+  disponibilite: true,
   estMiseEnAvant: true,
   createdAt: true,
   updatedAt: true,
@@ -276,10 +277,49 @@ export class OeuvreController {
       const result = await this.oeuvreService.getAllAdmin(
         query.page,
         query.limit,
-        { statut: query.statut, artisanId: query.artisanId, categorieId: query.categorieId },
+        {
+          statut: query.statut,
+          artisanId: query.artisanId,
+          categorieId: query.categorieId,
+          disponibilite: query.disponibilite,
+          q: query.q,
+        },
         adminSelect
       );
-      res.status(200).json({ success: true, ...result });
+      const oeuvres = result.oeuvres ?? [];
+      const totalPages = Math.ceil((result.total ?? 0) / query.limit);
+      res.status(200).json({
+        success: true,
+        items: oeuvres,
+        oeuvres,
+        total: result.total ?? 0,
+        page: query.page,
+        limit: query.limit,
+        totalPages,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  exportCsv = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const query = adminOeuvresQuerySchema.parse(req.query);
+      const csv = await this.oeuvreService.exportCsv(
+        {
+          statut: query.statut,
+          artisanId: query.artisanId,
+          categorieId: query.categorieId,
+          disponibilite: query.disponibilite,
+          q: query.q,
+        },
+        adminSelect
+      );
+      res
+        .status(200)
+        .setHeader('Content-Type', 'text/csv; charset=utf-8')
+        .setHeader('Content-Disposition', `attachment; filename="oeuvres-${Date.now()}.csv"`)
+        .send(csv);
     } catch (error) {
       next(error);
     }
@@ -309,6 +349,7 @@ export class OeuvreController {
           localisation: query.localisation,
           q: query.q,
           tri: query.tri,
+          disponibilite: query.disponibilite,
         },
         publicSelect
       );

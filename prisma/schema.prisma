@@ -105,8 +105,15 @@ enum ArtworkStatus {
   BROUILLON
   EN_ATTENTE_VALIDATION
   PUBLIEE
+  EN_PANIER
   VENDUE
   RETIREE
+}
+
+enum ArtworkAvailability {
+  DISPONIBLE
+  SUR_COMMANDE
+  EN_EXPOSITION
 }
 
 enum MediaType {
@@ -213,6 +220,8 @@ model ArtisanProfile {
   validatedByAdmin AdminProfile?   @relation("ArtisanKycValidation", fields: [validatedByAdminId], references: [id], onDelete: SetNull)
   oeuvres          Oeuvre[]
   lignesCommande   LigneCommande[]
+  commandesArtisans CommandeArtisan[]
+  litiges          Litige[]
 
   @@index([validatedByAdminId])
   @@map("artisan_profiles")
@@ -436,6 +445,7 @@ model Oeuvre {
   anneeCreation      Int
   prixXOF            Decimal       @db.Decimal(12, 0)
   statut             ArtworkStatus @default(BROUILLON)
+  disponibilite      ArtworkAvailability @default(DISPONIBLE)
   artisanId          String        @db.Uuid
   categorieId        String        @db.Uuid
   publishedByAdminId String?       @db.Uuid
@@ -454,6 +464,7 @@ model Oeuvre {
   @@index([artisanId])
   @@index([categorieId])
   @@index([statut])
+  @@index([disponibilite])
   @@index([estMiseEnAvant])
   @@map("oeuvres")
 }
@@ -533,22 +544,24 @@ model Article {
 // ---------------------------------------------------------------------------
 
 model Commande {
-  id             String      @id @default(uuid()) @db.Uuid
-  dateCreation   DateTime    @default(now())
-  statut         OrderStatus @default(COMMANDE)
-  montantTotal   Decimal     @db.Decimal(12, 0)
-  commission     Decimal     @default(0) @db.Decimal(12, 0)
-  typeCommande   OrderType   @default(STANDARD)
-  fraisLivraison Decimal     @default(0) @db.Decimal(12, 0)
-  acheteurId     String      @db.Uuid
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id             String             @id @default(uuid()) @db.Uuid
+  dateCreation   DateTime           @default(now())
+  statut         OrderStatus        @default(COMMANDE)
+  montantTotal   Decimal            @db.Decimal(12, 0)
+  commission     Decimal            @default(0) @db.Decimal(12, 0)
+  typeCommande   OrderType          @default(STANDARD)
+  fraisLivraison Decimal            @default(0) @db.Decimal(12, 0)
+  acheteurId     String             @db.Uuid
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
-  acheteur       BuyerProfile    @relation(fields: [acheteurId], references: [id], onDelete: Restrict)
-  lignesCommande LigneCommande[]
-  paiement       Paiement?
-  livraison      Livraison?
-  avis           Avis?
+  acheteur           BuyerProfile      @relation(fields: [acheteurId], references: [id], onDelete: Restrict)
+  lignesCommande     LigneCommande[]
+  commandesArtisans  CommandeArtisan[]
+  paiement           Paiement?
+  livraison          Livraison?
+  avis               Avis?
+  litiges            Litige[]
 
   @@index([acheteurId])
   @@index([statut])
@@ -556,21 +569,51 @@ model Commande {
 }
 
 model LigneCommande {
-  id           String  @id @default(uuid()) @db.Uuid
-  commandeId   String  @db.Uuid
-  oeuvreId     String  @db.Uuid
-  artisanId    String  @db.Uuid // Snapshot du vendeur au moment de la commande; doit rester cohérent avec Oeuvre.artisanId à la création.
-  prixUnitaire Decimal @db.Decimal(12, 0)
-  quantite     Int     @default(1)
+  id                 String           @id @default(uuid()) @db.Uuid
+  commandeId         String           @db.Uuid
+  oeuvreId           String           @db.Uuid
+  artisanId          String           @db.Uuid // Snapshot du vendeur au moment de la commande; doit rester cohérent avec Oeuvre.artisanId à la création.
+  prixUnitaire       Decimal          @db.Decimal(12, 0)
+  quantite           Int              @default(1)
+  commandeArtisanId  String?          @db.Uuid
 
-  commande Commande       @relation(fields: [commandeId], references: [id], onDelete: Cascade)
-  oeuvre   Oeuvre         @relation(fields: [oeuvreId], references: [id], onDelete: Restrict)
-  artisan  ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+  commande        Commande          @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  oeuvre          Oeuvre            @relation(fields: [oeuvreId], references: [id], onDelete: Restrict)
+  artisan         ArtisanProfile    @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+  commandeArtisan CommandeArtisan?  @relation(fields: [commandeArtisanId], references: [id], onDelete: SetNull)
 
   @@index([commandeId])
   @@index([oeuvreId])
   @@index([artisanId])
+  @@index([commandeArtisanId])
   @@map("ligne_commandes")
+}
+
+// ---------------------------------------------------------------------------
+// Commande multi-artisans : une CommandeArtisan par artisan dans une commande
+// ---------------------------------------------------------------------------
+
+model CommandeArtisan {
+  id              String      @id @default(uuid()) @db.Uuid
+  commandeId      String      @db.Uuid
+  artisanId       String      @db.Uuid
+  statut          OrderStatus @default(COMMANDE)
+  sousTotal       Decimal     @db.Decimal(12, 0)
+  commission      Decimal     @default(0) @db.Decimal(12, 0)
+  fraisLivraison  Decimal     @default(0) @db.Decimal(12, 0)
+  montantTotal    Decimal     @db.Decimal(12, 0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  commande       Commande         @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  artisan        ArtisanProfile   @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+  lignesCommande LigneCommande[]
+
+  @@unique([commandeId, artisanId])
+  @@index([commandeId])
+  @@index([artisanId])
+  @@index([statut])
+  @@map("commande_artisan")
 }
 
 model Paiement {
@@ -613,4 +656,37 @@ model Avis {
 
   // Contrainte PostgreSQL métier à ajouter dans la migration SQL : note >= 1 AND note <= 5.
   @@map("avis")
+}
+
+// ---------------------------------------------------------------------------
+// Litiges : centre de résolution des litiges entre clients et artisans
+// (Phase 1 : socle conforme maquette Admin, lecteur uniquement)
+// ---------------------------------------------------------------------------
+
+enum DisputeStatus {
+  OUVERT
+  EN_COURS
+  RESOLU
+}
+
+model Litige {
+  id         String        @id @default(uuid()) @db.Uuid
+  motif      String        @db.Text
+  statut     DisputeStatus @default(OUVERT)
+  commandeId String        @db.Uuid
+  artisanId  String        @db.Uuid
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  commande Commande       @relation(fields: [commandeId], references: [id], onDelete: Restrict)
+  artisan  ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+
+  // Chaque litige concerne UNE commande et UN artisan précis : une commande
+  // multi-artisans peut porter plusieurs litiges, chacun rattaché à l'artisan
+  // concerné via la colonne artisanId.
+
+  @@index([commandeId])
+  @@index([artisanId])
+  @@index([statut])
+  @@map("litiges")
 }

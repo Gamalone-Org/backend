@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '../../generated/prisma/client.js';
-import type { ArtworkStatus, MediaType } from '../../generated/prisma/client.js';
+import type { ArtworkAvailability, ArtworkStatus, MediaType } from '../../generated/prisma/client.js';
 import type { PublicOeuvreSelect, AdminOeuvreSelect } from './types.js';
 
 export class OeuvreRepository {
@@ -17,6 +17,7 @@ export class OeuvreRepository {
     prixXOF: number;
     artisanId: string;
     categorieId: string;
+    disponibilite?: ArtworkAvailability;
   }) {
     return this.prisma.oeuvre.create({
       data: {
@@ -30,6 +31,7 @@ export class OeuvreRepository {
         prixXOF: data.prixXOF,
         artisanId: data.artisanId,
         categorieId: data.categorieId,
+        disponibilite: data.disponibilite ?? 'DISPONIBLE',
       },
     });
   }
@@ -88,6 +90,7 @@ export class OeuvreRepository {
       localisation?: string;
       q?: string;
       tri?: string;
+      disponibilite?: ArtworkAvailability;
     },
     select: PublicOeuvreSelect
   ) {
@@ -95,6 +98,10 @@ export class OeuvreRepository {
 
     if (filters.categorieId) {
       where.categorieId = filters.categorieId;
+    }
+
+    if (filters.disponibilite) {
+      where.disponibilite = filters.disponibilite;
     }
 
     if (filters.prixMin !== undefined || filters.prixMax !== undefined) {
@@ -177,6 +184,8 @@ export class OeuvreRepository {
       statut?: ArtworkStatus;
       artisanId?: string;
       categorieId?: string;
+      disponibilite?: ArtworkAvailability;
+      q?: string;
     },
     select: AdminOeuvreSelect
   ) {
@@ -184,6 +193,13 @@ export class OeuvreRepository {
     if (filters.statut) where.statut = filters.statut;
     if (filters.artisanId) where.artisanId = filters.artisanId;
     if (filters.categorieId) where.categorieId = filters.categorieId;
+    if (filters.disponibilite) where.disponibilite = filters.disponibilite;
+    if (filters.q) {
+      where.OR = [
+        { titre: { contains: filters.q, mode: 'insensitive' } },
+        { description: { contains: filters.q, mode: 'insensitive' } },
+      ];
+    }
 
     const [oeuvres, total] = await Promise.all([
       this.prisma.oeuvre.findMany({
@@ -211,6 +227,7 @@ export class OeuvreRepository {
       prixXOF?: number;
       categorieId?: string;
       estMiseEnAvant?: boolean;
+      disponibilite?: ArtworkAvailability;
     }
   ) {
     return this.prisma.oeuvre.update({
@@ -371,12 +388,14 @@ export class OeuvreRepository {
   }
 
   async findKycValidForUser(userId: string) {
-    return this.prisma.kyc.findFirst({
+    const current = await this.prisma.kyc.findFirst({
       where: {
         userId,
-        status: 'VALIDE',
+        deletedAt: null,
       },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
+    return current && current.status === 'VALIDE' ? current : null;
   }
 
   async findArtisanProfileById(id: string) {
