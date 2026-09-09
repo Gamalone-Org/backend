@@ -4,6 +4,7 @@ import {
   updateOeuvreSchema,
   reorderMediasSchema,
   publicOeuvreQuerySchema,
+  adminOeuvresQuerySchema,
 } from '../../src/modules/marketplace/oeuvre.schema.js';
 
 const validOeuvre = {
@@ -29,6 +30,35 @@ describe('createOeuvreSchema', () => {
     const { poids: _poids, ...rest } = validOeuvre;
     const parsed = createOeuvreSchema.parse(rest);
     expect(parsed.poids).toBeUndefined();
+  });
+
+  it('defaults disponibilite to DISPONIBLE when omitted', () => {
+    const parsed = createOeuvreSchema.parse(validOeuvre);
+    expect(parsed.disponibilite).toBe('DISPONIBLE');
+  });
+
+  it('accepts an explicit DISPONIBLE', () => {
+    const parsed = createOeuvreSchema.parse({ ...validOeuvre, disponibilite: 'DISPONIBLE' });
+    expect(parsed.disponibilite).toBe('DISPONIBLE');
+  });
+
+  it('accepts an explicit SUR_COMMANDE', () => {
+    const parsed = createOeuvreSchema.parse({ ...validOeuvre, disponibilite: 'SUR_COMMANDE' });
+    expect(parsed.disponibilite).toBe('SUR_COMMANDE');
+  });
+
+  it('accepts an explicit EN_EXPOSITION', () => {
+    const parsed = createOeuvreSchema.parse({ ...validOeuvre, disponibilite: 'EN_EXPOSITION' });
+    expect(parsed.disponibilite).toBe('EN_EXPOSITION');
+  });
+
+  it('rejects an invalid disponibilite value', () => {
+    expect(() => createOeuvreSchema.parse({ ...validOeuvre, disponibilite: 'EPUISEE' })).toThrow();
+    expect(() => createOeuvreSchema.parse({ ...validOeuvre, disponibilite: 'VENDUE' })).toThrow();
+  });
+
+  it('rejects a wrong-case disponibilite value', () => {
+    expect(() => createOeuvreSchema.parse({ ...validOeuvre, disponibilite: 'disponible' })).toThrow();
   });
 
   it('rejects a payload without required titre', () => {
@@ -82,6 +112,19 @@ describe('updateOeuvreSchema', () => {
   it('rejects forbidden fields like statut', () => {
     expect(() => updateOeuvreSchema.parse({ statut: 'PUBLIEE' })).toThrow();
   });
+
+  it('accepts a valid disponibilite on update', () => {
+    const parsed = updateOeuvreSchema.parse({ disponibilite: 'SUR_COMMANDE' });
+    expect(parsed.disponibilite).toBe('SUR_COMMANDE');
+  });
+
+  it('rejects an invalid disponibilite on update', () => {
+    expect(() => updateOeuvreSchema.parse({ disponibilite: 'EPUISEE' })).toThrow();
+  });
+
+  it('rejects a wrong-case disponibilite on update', () => {
+    expect(() => updateOeuvreSchema.parse({ disponibilite: 'sur_commande' })).toThrow();
+  });
 });
 
 describe('reorderMediasSchema', () => {
@@ -124,5 +167,25 @@ describe('publicOeuvreQuerySchema', () => {
   it('accepts valid sort orders', () => {
     const parsed = publicOeuvreQuerySchema.parse({ tri: 'prixXOF_asc' });
     expect(parsed.tri).toBe('prixXOF_asc');
+  });
+
+  it('accepts a valid disponibilite filter', () => {
+    const parsed = publicOeuvreQuerySchema.parse({ disponibilite: 'EN_EXPOSITION' });
+    expect(parsed.disponibilite).toBe('EN_EXPOSITION');
+  });
+
+  it('rejects an invalid disponibilite filter', () => {
+    expect(() => publicOeuvreQuerySchema.parse({ disponibilite: 'EPUISEE' })).toThrow();
+  });
+});
+
+describe('adminOeuvresQuerySchema', () => {
+  it('accepts a valid disponibilite filter', () => {
+    const parsed = adminOeuvresQuerySchema.parse({ disponibilite: 'SUR_COMMANDE' });
+    expect(parsed.disponibilite).toBe('SUR_COMMANDE');
+  });
+
+  it('rejects an invalid disponibilite filter', () => {
+    expect(() => adminOeuvresQuerySchema.parse({ disponibilite: 'EPUISEE' })).toThrow();
   });
 });

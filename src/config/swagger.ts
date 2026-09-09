@@ -12,6 +12,7 @@ const tags = [
   { name: 'Payments', description: 'Payments and transactions' },
   { name: 'Deliveries', description: 'Delivery management' },
   { name: 'Reviews', description: 'Reviews and ratings' },
+  { name: 'Disputes', description: 'Litiges clients-artisans (back-office Admin)' },
   { name: 'Media', description: 'Media upload and retrieval' },
   { name: 'Certificates', description: 'Certificates and validation assets' },
   { name: 'KYC', description: 'Identity validation flows' },
@@ -828,7 +829,7 @@ export const swaggerDocument = {
         tags: ['Artworks'],
         summary: 'List published artworks (public)',
         description:
-          'Public consultation of published artworks with pagination, filters (categorieId, prixMin/prixMax, artisanType, localisation, q), and sorting. Only PUBLIEES artworks are exposed.',
+          'Public consultation of published artworks with pagination, filters (categorieId, prixMin/prixMax, artisanType, localisation, q, disponibilite), and sorting. Only PUBLIEES artworks are exposed.',
         security: [],
         parameters: [
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
@@ -843,6 +844,15 @@ export const swaggerDocument = {
             in: 'query',
             required: false,
             schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'disponibilite',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: ['DISPONIBLE', 'SUR_COMMANDE', 'EN_EXPOSITION'],
+            },
           },
           {
             name: 'prixMin',
@@ -1018,7 +1028,7 @@ export const swaggerDocument = {
         tags: ['Artworks'],
         summary: 'List all artworks (admin)',
         description:
-          'Admin listing of artworks with optional filters (statut, artisanId, categorieId). Requires SUPPORT admin level minimum.',
+          'Admin listing of artworks with optional filters (statut, artisanId, categorieId, disponibilite, q). Requires SUPPORT admin level minimum.',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
@@ -1034,7 +1044,7 @@ export const swaggerDocument = {
             required: false,
             schema: {
               type: 'string',
-              enum: ['BROUILLON', 'EN_ATTENTE_VALIDATION', 'PUBLIEE', 'RETIREE'],
+              enum: ['BROUILLON', 'EN_ATTENTE_VALIDATION', 'PUBLIEE', 'VENDUE', 'RETIREE'],
             },
           },
           {
@@ -1049,9 +1059,72 @@ export const swaggerDocument = {
             required: false,
             schema: { type: 'string', format: 'uuid' },
           },
+          {
+            name: 'disponibilite',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: ['DISPONIBLE', 'SUR_COMMANDE', 'EN_EXPOSITION'],
+            },
+          },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
         ],
         responses: {
           '200': { description: 'List of all artworks' },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/oeuvres/export': {
+      get: {
+        tags: ['Artworks'],
+        summary: 'Export artworks to CSV (admin)',
+        description:
+          'Exports artworks as a CSV file respecting the same filters as the list endpoint (statut, artisanId, categorieId, disponibilite, q). Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: ['BROUILLON', 'EN_ATTENTE_VALIDATION', 'PUBLIEE', 'VENDUE', 'RETIREE'],
+            },
+          },
+          {
+            name: 'artisanId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'categorieId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'disponibilite',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: ['DISPONIBLE', 'SUR_COMMANDE', 'EN_EXPOSITION'],
+            },
+          },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': {
+            description: 'CSV file exported',
+            content: { 'text/csv': { schema: { type: 'string' } } },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: admin access required' },
         },
       },
@@ -1068,6 +1141,7 @@ export const swaggerDocument = {
         ],
         responses: {
           '200': { description: 'Artwork details' },
+          '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: admin access required' },
           '404': { description: 'Artwork not found' },
         },
@@ -1147,6 +1221,7 @@ export const swaggerDocument = {
         ],
         responses: {
           '200': { description: 'Artwork withdrawn' },
+          '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: admin access required' },
           '404': { description: 'Artwork not found' },
           '409': { description: 'Artwork is not published' },
@@ -1485,6 +1560,350 @@ export const swaggerDocument = {
           '403': { description: 'Forbidden: admin access required' },
           '404': { description: 'Order not found' },
           '409': { description: 'Order cannot be cancelled at its current status' },
+        },
+      },
+    },
+    '/api/v1/admin/livraisons': {
+      get: {
+        tags: ['Deliveries'],
+        summary: 'List deliveries (admin)',
+        description:
+          'Paginated admin listing of all deliveries (expéditions) with optional filters (q search on commande id, numeroSuivi, transporteur or adresseDest; statut filter) and pagination. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 50 },
+          },
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: [
+                'EN_ATTENTE',
+                'PREPAREE',
+                'EXPEDIEE',
+                'EN_TRANSIT',
+                'LIVREE',
+                'ECHEC',
+              ],
+            },
+          },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': {
+            description:
+              'Paginated list of deliveries: { success, items, total, page, limit, totalPages }',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DeliveryListResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/livraisons/export': {
+      get: {
+        tags: ['Deliveries'],
+        summary: 'Export deliveries to CSV (admin)',
+        description:
+          'Exports all filtered deliveries as a CSV file (up to 5000 rows), respecting the same filters as the list endpoint (q, statut). Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: [
+                'EN_ATTENTE',
+                'PREPAREE',
+                'EXPEDIEE',
+                'EN_TRANSIT',
+                'LIVREE',
+                'ECHEC',
+              ],
+            },
+          },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': {
+            description: 'CSV file exported (text/csv)',
+            content: {
+              'text/csv; charset=utf-8': {
+                schema: { type: 'string' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/livraisons/{id}': {
+      get: {
+        tags: ['Deliveries'],
+        summary: 'Get delivery details (admin)',
+        description:
+          'Returns delivery details (transporteur, numeroSuivi, statut, adresseDest, frais) and the associated order (commande, acheteur). Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Delivery details',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DeliveryDetail' },
+              },
+            },
+          },
+          '400': { description: 'Invalid delivery id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Delivery not found' },
+        },
+      },
+      patch: {
+        tags: ['Deliveries'],
+        summary: 'Update logistics information (admin)',
+        description:
+          'Updates the existing delivery fields transporteur and/or numeroSuivi. At least one field is required. The update is applied directly on the Livraison record: the order, its payment and its artworks are never modified. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/UpdateDeliveryRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Delivery updated' },
+          '400': { description: 'Invalid payload or delivery id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Delivery not found' },
+        },
+      },
+    },
+    '/api/v1/admin/livraisons/{id}/statut': {
+      patch: {
+        tags: ['Deliveries'],
+        summary: 'Update delivery status (admin)',
+        description:
+          'Updates the delivery status manually using the existing DeliveryStatus enum (EN_ATTENTE, PREPAREE, EXPEDIEE, EN_TRANSIT, LIVREE, ECHEC). The status update is independent of the order status: Commande.statut is never modified. Requires MODERATEUR admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/UpdateDeliveryStatutRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Status updated' },
+          '400': { description: 'Invalid payload or delivery id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Delivery not found' },
+        },
+      },
+    },
+    '/api/v1/admin/avis': {
+      get: {
+        tags: ['Reviews'],
+        summary: 'List reviews (admin)',
+        description:
+          'Paginated admin list of reviews with database-side search and filters. Search q matches the comment, buyer name and artwork title. Filters only use real fields: note (1-5), estVerifie, dateDebut/dateFin (dateAvis), commandeId, auteurId (buyer userId), oeuvreId, artisanId. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string', maxLength: 255 } },
+          { name: 'note', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 5 } },
+          { name: 'estVerifie', in: 'query', required: false, schema: { type: 'boolean' } },
+          { name: 'dateDebut', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'dateFin', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'commandeId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'auteurId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'oeuvreId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'artisanId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Paginated review list',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ReviewListResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/avis/export': {
+      get: {
+        tags: ['Reviews'],
+        summary: 'Export reviews as CSV (admin)',
+        description:
+          'Exports filtered reviews as CSV using the same filters as the list endpoint, capped at 5000 rows and without user pagination.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'q', in: 'query', required: false, schema: { type: 'string', maxLength: 255 } },
+          { name: 'note', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 5 } },
+          { name: 'estVerifie', in: 'query', required: false, schema: { type: 'boolean' } },
+          { name: 'dateDebut', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'dateFin', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'commandeId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'auteurId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'oeuvreId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'artisanId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'CSV export',
+            content: { 'text/csv': { schema: { type: 'string' } } },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/avis/{id}': {
+      get: {
+        tags: ['Reviews'],
+        summary: 'Get review detail (admin)',
+        description:
+          'Returns the full review detail with the attached order, buyer, and order lines (artwork title and artisan studio) using only the real relations available on the Avis model.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Review detail',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ReviewDetail' },
+              },
+            },
+          },
+          '400': { description: 'Invalid review id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Review not found' },
+        },
+      },
+    },
+    '/api/v1/admin/litiges': {
+      get: {
+        tags: ['Disputes'],
+        summary: 'List disputes (admin)',
+        description:
+          'Paginated admin list of disputes with database-side search and filters. Search q matches the dispute id, order id, motif, artisan (studio name or person name), buyer name and artwork title. Filters only use real fields: statut (OUVERT, EN_COURS, RESOLU), commandeId, clientId (buyer userId), artisanId, dateDebut/dateFin (createdAt). Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string', maxLength: 255 } },
+          { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['OUVERT', 'EN_COURS', 'RESOLU'] } },
+          { name: 'commandeId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'clientId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'artisanId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'dateDebut', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'dateFin', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Paginated dispute list',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DisputeListResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/litiges/export': {
+      get: {
+        tags: ['Disputes'],
+        summary: 'Export disputes as CSV (admin)',
+        description:
+          'Exports filtered disputes as CSV using the same filters as the list endpoint, capped at 5000 rows and without user pagination.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'q', in: 'query', required: false, schema: { type: 'string', maxLength: 255 } },
+          { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['OUVERT', 'EN_COURS', 'RESOLU'] } },
+          { name: 'commandeId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'clientId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'artisanId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'dateDebut', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'dateFin', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+        ],
+        responses: {
+          '200': {
+            description: 'CSV export',
+            content: { 'text/csv': { schema: { type: 'string' } } },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/litiges/{id}': {
+      get: {
+        tags: ['Disputes'],
+        summary: 'Get dispute detail (admin)',
+        description:
+          'Returns the full dispute detail: dispute fields (motif, statut, dates), the artisan concerned and the attached order with buyer, payment, delivery, order lines and artisan slices, using only the real relations available on the Litige model.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Dispute detail',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/DisputeDetail' },
+              },
+            },
+          },
+          '400': { description: 'Invalid dispute id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Dispute not found' },
         },
       },
     },
@@ -1896,7 +2315,7 @@ export const swaggerDocument = {
         tags: ['Articles'],
         summary: 'List articles (admin)',
         description:
-          'Paginated list of non-deleted articles with filters (statut, categorieId, q) and sorting (tri). Requires SUPPORT admin level minimum.',
+          'Paginated list of non-deleted articles with filters (statut, categorieId, auteurId, dateDebut, dateFin, q) and sorting (tri). q searches the title, content, slug, category name and author name (case-insensitive). Requires SUPPORT admin level minimum.',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
@@ -1918,6 +2337,24 @@ export const swaggerDocument = {
             required: false,
             schema: { type: 'string', format: 'uuid' },
           },
+          {
+            name: 'auteurId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'dateDebut',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'date-time' },
+          },
+          {
+            name: 'dateFin',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'date-time' },
+          },
           { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
           {
             name: 'tri',
@@ -1928,6 +2365,62 @@ export const swaggerDocument = {
         ],
         responses: {
           '200': { description: 'Paginated list of articles' },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/articles/export': {
+      get: {
+        tags: ['Articles'],
+        summary: 'Export articles to CSV (admin)',
+        description:
+          'Exports filtered articles as a CSV file (up to 5000 rows), applying the same filters as the list endpoint (statut, categorieId, auteurId, dateDebut, dateFin, q) without user pagination. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['BROUILLON', 'PLANIFIE', 'PUBLIE'] },
+          },
+          {
+            name: 'categorieId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'auteurId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+          },
+          {
+            name: 'dateDebut',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'date-time' },
+          },
+          {
+            name: 'dateFin',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'date-time' },
+          },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': {
+            description: 'CSV file exported (text/csv)',
+            content: {
+              'text/csv; charset=utf-8': {
+                schema: { type: 'string' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
           '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: admin access required' },
         },
@@ -2268,7 +2761,7 @@ export const swaggerDocument = {
         tags: ['Users'],
         summary: 'Export users CSV (admin)',
         description:
-          'Exporte en CSV les utilisateurs selon les mêmes filtres que la liste (q, role, statut, bloques). SUPPORT minimum.',
+          'Exporte en CSV les utilisateurs selon les mêmes filtres que la liste (q, role, statut, bloques). Limite 5000 lignes, sans pagination. SUPPORT minimum.',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
@@ -2280,6 +2773,149 @@ export const swaggerDocument = {
           '200': { description: 'Fichier CSV', content: { 'text/csv': { schema: { type: 'string' } } } },
           '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: non-admin' },
+        },
+      },
+    },
+  '/api/v1/admin/dashboard': {
+      get: {
+        tags: ['Admin Dashboard'],
+        summary: 'Dashboard admin (SUPER_ADMIN)',
+        description:
+          "Vue d'ensemble des indicateurs de la plateforme : utilisateurs, KYC, œuvres, commandes, volume brut des commandes et évolution temporelle. Réservé au SUPER_ADMIN : le endpoint expose des données financières, SUPPORT et MODERATEUR n'y ont pas accès.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'period',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['7d', '30d', '90d', '12m'], default: '30d' },
+            description: "Période d'analyse : 7d, 30d, 90d (journalier) ou 12m (mensuel).",
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Indicateurs du dashboard',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminDashboardResponse' },
+              },
+            },
+          },
+          '400': { description: 'Période invalide (doit être 7d, 30d, 90d ou 12m)' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN requis' },
+        },
+      },
+    },
+  '/api/v1/admin/artisans': {
+      get: {
+        tags: ['Admin Artisans'],
+        summary: 'Liste des artisans (SUPPORT+)',
+        description:
+          "Liste paginée des artisans (rôle ARTISAN, non supprimés). Chaque ligne expose le nom, l'atelier, l'avatar, la spécialité, la localisation, la date d'inscription, le statut du compte, le statut du dernier dossier KYC (sans documents), le nombre d'œuvres et le volume brut des commandes. Réservé aux administrateurs (SUPPORT minimum).",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' }, description: 'Recherche sur nom, e-mail, téléphone, atelier, spécialité ou localisation.' },
+          { name: 'kycStatus', in: 'query', required: false, schema: { type: 'string', enum: ['BROUILLON', 'SOUMIS', 'EN_ATTENTE', 'VALIDE', 'REJETE', 'CORRECTION_REQUISE', 'EXPIRE'] }, description: 'Statut du dernier dossier KYC. Exclut kycPending.' },
+          { name: 'kycPending', in: 'query', required: false, schema: { type: 'string', enum: ['true', 'false'] }, description: 'true = dernier KYC en attente (SOUMIS ou EN_ATTENTE). Exclut kycStatus.' },
+          { name: 'accountStatus', in: 'query', required: false, schema: { type: 'string', enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'] }, description: 'Statut du compte utilisateur (ex. SUSPENDU pour la maquette « Suspendus »).' },
+        ],
+        responses: {
+          '200': {
+            description: 'Liste paginée des artisans',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminArtisanListResponse' },
+              },
+            },
+          },
+          '400': { description: 'Paramètre invalide (kycStatus + kycPending exclusifs, limit > 100…)' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPPORT minimum requis' },
+        },
+      },
+    },
+  '/api/v1/admin/artisans/{id}': {
+      get: {
+        tags: ['Admin Artisans'],
+        summary: "Détail administratif d'un artisan (SUPPORT+)",
+        description:
+          "Profil utilisateur, données de l'atelier, synthèse du dernier dossier KYC (statut et dates, sans pièces jointes — à consulter via l'API KYC dédiée) et statistiques (œuvres par statut, commandes, volume brut). id = identifiant du profil artisan (ArtisanProfile.id).",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: {
+          '200': {
+            description: "Détail administratif de l'artisan",
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminArtisanDetailResponse' },
+              },
+            },
+          },
+          '400': { description: "Identifiant d'artisan invalide (UUID requis)" },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPPORT minimum requis' },
+          '404': { description: 'Artisan non trouvé' },
+        },
+      },
+    },
+  '/api/v1/admin/artisans/{id}/artworks': {
+      get: {
+        tags: ['Admin Artisans'],
+        summary: "Œuvres d'un artisan (SUPPORT+)",
+        description:
+          'Liste paginée des œuvres de l\'artisan, filtrable par statut. Données minimales : titre, statut, prix, date de création et image de couverture.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['BROUILLON', 'EN_ATTENTE_VALIDATION', 'PUBLIEE', 'EN_PANIER', 'VENDUE', 'RETIREE'] } },
+        ],
+        responses: {
+          '200': {
+            description: 'Œuvres de l\'artisan',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminArtisanArtworksResponse' },
+              },
+            },
+          },
+          '400': { description: 'Paramètre invalide (id UUID, statut œuvre valide, limit ≤ 100)' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPPORT minimum requis' },
+          '404': { description: 'Artisan non trouvé' },
+        },
+      },
+    },
+  '/api/v1/admin/artisans/{id}/orders': {
+      get: {
+        tags: ['Admin Artisans'],
+        summary: "Commandes d'un artisan (SUPPORT+)",
+        description:
+          'Liste paginée des commandes de l\'artisan issues de CommandeArtisan, filtrable par statut : sous-total, commission, frais de livraison, montant total, et données minimales de la commande globale et de l\'acheteur (sans numéro de téléphone).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['COMMANDE', 'PREPARATION', 'EXPEDIEE', 'LIVREE', 'CLOTUREE', 'ANNULEE', 'REMBOURSEE'] } },
+        ],
+        responses: {
+          '200': {
+            description: 'Commandes de l\'artisan',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminArtisanOrdersResponse' },
+              },
+            },
+          },
+          '400': { description: 'Paramètre invalide (id UUID, statut commande valide, limit ≤ 100)' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPPORT minimum requis' },
+          '404': { description: 'Artisan non trouvé' },
         },
       },
     },
@@ -2382,8 +3018,9 @@ export const swaggerDocument = {
           total: { type: 'integer' },
           page: { type: 'integer' },
           limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
         },
-        required: ['success', 'items', 'total', 'page', 'limit'],
+        required: ['success', 'items', 'total', 'page', 'limit', 'totalPages'],
       },
       AdminUserDetailResponse: {
         type: 'object',
@@ -2568,6 +3205,423 @@ export const swaggerDocument = {
         required: ['statut'],
         additionalProperties: false,
       },
+      DeliveryListItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          transporteur: { type: 'string', example: 'DHL Express' },
+          numeroSuivi: { type: 'string', nullable: true, example: 'TG48-851-PORT' },
+          statut: {
+            type: 'string',
+            enum: ['EN_ATTENTE', 'PREPAREE', 'EXPEDIEE', 'EN_TRANSIT', 'LIVREE', 'ECHEC'],
+          },
+          adresseDest: { type: 'string', example: 'Lomé, Tokoin, Rue 12' },
+          frais: { type: 'number', example: 1000 },
+          commande: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              dateCreation: { type: 'string', format: 'date-time' },
+              statut: { type: 'string', example: 'COMMANDE' },
+            },
+          },
+        },
+        required: ['id', 'transporteur', 'statut', 'adresseDest', 'frais', 'commande'],
+      },
+      DeliveryListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          items: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/DeliveryListItem' },
+          },
+          total: { type: 'integer', example: 42 },
+          page: { type: 'integer', example: 1 },
+          limit: { type: 'integer', example: 20 },
+          totalPages: { type: 'integer', example: 3 },
+        },
+        required: ['success', 'items', 'total', 'page', 'limit', 'totalPages'],
+      },
+      DeliveryDetail: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          livraison: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              transporteur: { type: 'string' },
+              numeroSuivi: { type: 'string', nullable: true },
+              statut: {
+                type: 'string',
+                enum: ['EN_ATTENTE', 'PREPAREE', 'EXPEDIEE', 'EN_TRANSIT', 'LIVREE', 'ECHEC'],
+              },
+              adresseDest: { type: 'string' },
+              frais: { type: 'number' },
+              commande: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  dateCreation: { type: 'string', format: 'date-time' },
+                  statut: { type: 'string', example: 'COMMANDE' },
+                  typeCommande: { type: 'string', example: 'STANDARD' },
+                  montantTotal: { type: 'number' },
+                  fraisLivraison: { type: 'number' },
+                  acheteur: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', format: 'uuid' },
+                      adresseLivraison: { type: 'string', nullable: true },
+                      user: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'string', format: 'uuid' },
+                          nom: { type: 'string', nullable: true },
+                          telephone: { type: 'string' },
+                          email: { type: 'string', nullable: true },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            required: ['id', 'transporteur', 'statut', 'adresseDest', 'frais'],
+          },
+        },
+        required: ['success', 'livraison'],
+      },
+      UpdateDeliveryRequest: {
+        type: 'object',
+        properties: {
+          transporteur: { type: 'string', maxLength: 255 },
+          numeroSuivi: { type: 'string', maxLength: 255 },
+        },
+        description: 'At least one of transporteur or numeroSuivi must be provided.',
+        additionalProperties: false,
+      },
+      UpdateDeliveryStatutRequest: {
+        type: 'object',
+        properties: {
+          statut: {
+            type: 'string',
+            enum: ['EN_ATTENTE', 'PREPAREE', 'EXPEDIEE', 'EN_TRANSIT', 'LIVREE', 'ECHEC'],
+          },
+        },
+        required: ['statut'],
+        additionalProperties: false,
+      },
+      AvisQueryParams: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+          q: { type: 'string', maxLength: 255 },
+          note: { type: 'integer', minimum: 1, maximum: 5 },
+          estVerifie: { type: 'boolean' },
+          dateDebut: { type: 'string', format: 'date-time' },
+          dateFin: { type: 'string', format: 'date-time' },
+          commandeId: { type: 'string', format: 'uuid' },
+          auteurId: { type: 'string', format: 'uuid' },
+          oeuvreId: { type: 'string', format: 'uuid' },
+          artisanId: { type: 'string', format: 'uuid' },
+        },
+      },
+      ReviewListItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          note: { type: 'integer', minimum: 1, maximum: 5 },
+          commentaire: { type: 'string' },
+          dateAvis: { type: 'string', format: 'date-time' },
+          estVerifie: { type: 'boolean' },
+          commande: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              dateCreation: { type: 'string', format: 'date-time' },
+              typeCommande: { type: 'string' },
+              acheteur: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  user: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', format: 'uuid' },
+                      nom: { type: 'string', nullable: true },
+                      telephone: { type: 'string' },
+                      email: { type: 'string', nullable: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      ReviewListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          items: { type: 'array', items: { $ref: '#/components/schemas/ReviewListItem' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
+        },
+        required: ['success', 'items', 'total', 'page', 'limit', 'totalPages'],
+      },
+      ReviewDetail: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          note: { type: 'integer', minimum: 1, maximum: 5 },
+          commentaire: { type: 'string' },
+          dateAvis: { type: 'string', format: 'date-time' },
+          estVerifie: { type: 'boolean' },
+          commande: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              dateCreation: { type: 'string', format: 'date-time' },
+              statut: { type: 'string' },
+              typeCommande: { type: 'string' },
+              montantTotal: { type: 'number' },
+              fraisLivraison: { type: 'number' },
+              acheteur: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  user: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', format: 'uuid' },
+                      nom: { type: 'string', nullable: true },
+                      telephone: { type: 'string' },
+                      email: { type: 'string', nullable: true },
+                    },
+                  },
+                },
+              },
+              lignesCommande: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', format: 'uuid' },
+                    quantite: { type: 'integer' },
+                    prixUnitaire: { type: 'number' },
+                    oeuvre: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', format: 'uuid' },
+                        titre: { type: 'string' },
+                      },
+                    },
+                    artisan: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', format: 'uuid' },
+                        nomAtelier: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      DisputeQueryParams: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', minimum: 1, default: 1 },
+          limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
+          q: { type: 'string', maxLength: 255 },
+          statut: { type: 'string', enum: ['OUVERT', 'EN_COURS', 'RESOLU'] },
+          commandeId: { type: 'string', format: 'uuid' },
+          clientId: { type: 'string', format: 'uuid' },
+          artisanId: { type: 'string', format: 'uuid' },
+          dateDebut: { type: 'string', format: 'date-time' },
+          dateFin: { type: 'string', format: 'date-time' },
+        },
+      },
+      DisputeListItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          motif: { type: 'string' },
+          statut: { type: 'string', enum: ['OUVERT', 'EN_COURS', 'RESOLU'] },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          commande: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              dateCreation: { type: 'string', format: 'date-time' },
+              statut: { type: 'string' },
+              typeCommande: { type: 'string' },
+              montantTotal: { type: 'number' },
+              acheteur: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  user: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', format: 'uuid' },
+                      nom: { type: 'string', nullable: true },
+                      telephone: { type: 'string' },
+                      email: { type: 'string', nullable: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          artisan: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              nomAtelier: { type: 'string' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  nom: { type: 'string', nullable: true },
+                  telephone: { type: 'string' },
+                  email: { type: 'string', nullable: true },
+                },
+              },
+            },
+          },
+        },
+      },
+      DisputeListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          items: { type: 'array', items: { $ref: '#/components/schemas/DisputeListItem' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
+        },
+        required: ['success', 'items', 'total', 'page', 'limit', 'totalPages'],
+      },
+      DisputeDetail: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          motif: { type: 'string' },
+          statut: { type: 'string', enum: ['OUVERT', 'EN_COURS', 'RESOLU'] },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          commande: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              dateCreation: { type: 'string', format: 'date-time' },
+              statut: { type: 'string' },
+              typeCommande: { type: 'string' },
+              montantTotal: { type: 'number' },
+              commission: { type: 'number' },
+              fraisLivraison: { type: 'number' },
+              acheteur: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  adresseLivraison: { type: 'string' },
+                  user: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', format: 'uuid' },
+                      nom: { type: 'string', nullable: true },
+                      telephone: { type: 'string' },
+                      email: { type: 'string', nullable: true },
+                    },
+                  },
+                },
+              },
+              paiement: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  montant: { type: 'number' },
+                  methode: { type: 'string' },
+                  statut: { type: 'string' },
+                  date: { type: 'string', format: 'date-time' },
+                  estEnsequestre: { type: 'boolean' },
+                },
+              },
+              livraison: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  transporteur: { type: 'string' },
+                  numeroSuivi: { type: 'string', nullable: true },
+                  statut: { type: 'string' },
+                  adresseDest: { type: 'string' },
+                  frais: { type: 'number' },
+                },
+              },
+              lignesCommande: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', format: 'uuid' },
+                    quantite: { type: 'integer' },
+                    prixUnitaire: { type: 'number' },
+                    artisanId: { type: 'string', format: 'uuid' },
+                    oeuvre: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', format: 'uuid' },
+                        titre: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+              commandesArtisans: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', format: 'uuid' },
+                    artisanId: { type: 'string', format: 'uuid' },
+                    statut: { type: 'string' },
+                    montantTotal: { type: 'number' },
+                  },
+                },
+              },
+            },
+          },
+          artisan: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              nomAtelier: { type: 'string' },
+              localisation: { type: 'string' },
+              estCertifie: { type: 'boolean' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  nom: { type: 'string', nullable: true },
+                  telephone: { type: 'string' },
+                  email: { type: 'string', nullable: true },
+                },
+              },
+            },
+          },
+        },
+      },
       Kyc: {
         type: 'object',
         properties: {
@@ -2654,8 +3708,23 @@ export const swaggerDocument = {
           anneeCreation: { type: 'integer', example: 2023 },
           prixXOF: { type: 'integer', minimum: 0, example: 50000 },
           categorieId: { type: 'string', format: 'uuid' },
+          disponibilite: {
+            type: 'string',
+            enum: ['DISPONIBLE', 'SUR_COMMANDE', 'EN_EXPOSITION'],
+            default: 'DISPONIBLE',
+          },
         },
-        required: ['artisanId', 'titre', 'description', 'prixXOF', 'categorieId'],
+        required: [
+          'artisanId',
+          'titre',
+          'description',
+          'technique',
+          'materiaux',
+          'dimensions',
+          'anneeCreation',
+          'prixXOF',
+          'categorieId',
+        ],
         additionalProperties: false,
       },
       OeuvreUpdateRequest: {
@@ -2670,6 +3739,11 @@ export const swaggerDocument = {
           anneeCreation: { type: 'integer' },
           prixXOF: { type: 'integer', minimum: 0 },
           categorieId: { type: 'string', format: 'uuid' },
+          estMiseEnAvant: { type: 'boolean' },
+          disponibilite: {
+            type: 'string',
+            enum: ['DISPONIBLE', 'SUR_COMMANDE', 'EN_EXPOSITION'],
+          },
         },
         additionalProperties: false,
       },
@@ -2735,6 +3809,280 @@ export const swaggerDocument = {
           updatedAt: { type: 'string', format: 'date-time' },
         },
         required: ['id', 'titre', 'contenu', 'slug', 'statut', 'categorieId', 'auteurId', 'createdAt', 'updatedAt'],
+      },
+      AdminDashboardResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          period: {
+            type: 'object',
+            properties: {
+              key: { type: 'string', enum: ['7d', '30d', '90d', '12m'] },
+              from: { type: 'string', format: 'date-time' },
+              to: { type: 'string', format: 'date-time' },
+            },
+          },
+          users: {
+            type: 'object',
+            properties: {
+              total: { type: 'integer' },
+              buyers: { type: 'integer' },
+              artisans: { type: 'integer' },
+              newUsers: { type: 'integer' },
+              newBuyers: { type: 'integer' },
+              newArtisans: { type: 'integer' },
+            },
+          },
+          kyc: {
+            type: 'object',
+            properties: {
+              pending: { type: 'integer' },
+              approved: { type: 'integer' },
+              rejected: { type: 'integer' },
+            },
+          },
+          artworks: {
+            type: 'object',
+            properties: {
+              total: { type: 'integer' },
+              published: { type: 'integer' },
+              pending: { type: 'integer' },
+              reserved: { type: 'integer' },
+              withdrawn: { type: 'integer' },
+              sold: { type: 'integer' },
+              newArtworks: { type: 'integer' },
+            },
+          },
+          orders: {
+            type: 'object',
+            properties: {
+              total: { type: 'integer' },
+              inPeriod: { type: 'integer' },
+              byStatus: {
+                type: 'object',
+                properties: {
+                  COMMANDE: { type: 'integer' },
+                  PREPARATION: { type: 'integer' },
+                  EXPEDIEE: { type: 'integer' },
+                  LIVREE: { type: 'integer' },
+                  CLOTUREE: { type: 'integer' },
+                  ANNULEE: { type: 'integer' },
+                  REMBOURSEE: { type: 'integer' },
+                },
+              },
+            },
+          },
+          revenue: {
+            type: 'object',
+            properties: {
+              grossOrderVolume: { type: 'number' },
+            },
+            description:
+              "Volume brut des commandes de la période, à ne pas confondre avec un chiffre d'affaires confirmé (paiement réel non implémenté).",
+          },
+          evolution: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                date: { type: 'string', format: 'date' },
+                orders: { type: 'integer' },
+                volume: { type: 'number' },
+              },
+            },
+            description: 'Série temporelle zéro-remplie : quotidienne pour 7d/30d/90d, mensuelle pour 12m.',
+          },
+          recentOrders: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                dateCreation: { type: 'string', format: 'date-time' },
+                statut: { type: 'string', enum: ['COMMANDE', 'PREPARATION', 'EXPEDIEE', 'LIVREE', 'CLOTUREE', 'ANNULEE', 'REMBOURSEE'] },
+                montantTotal: { type: 'number' },
+                createdAt: { type: 'string', format: 'date-time' },
+                acheteur: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', format: 'uuid' },
+                    typeClient: { type: 'string' },
+                    user: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', format: 'uuid' },
+                        nom: { type: 'string', nullable: true },
+                        telephone: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            description: '10 dernières commandes, createdAt DESC, données minimales.',
+          },
+        },
+        required: [
+          'success',
+          'period',
+          'users',
+          'kyc',
+          'artworks',
+          'orders',
+          'revenue',
+          'evolution',
+          'recentOrders',
+        ],
+      },
+      AdminArtisanListItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid', description: 'ArtisanProfile.id' },
+          userId: { type: 'string', format: 'uuid' },
+          nom: { type: 'string', nullable: true },
+          nomAtelier: { type: 'string' },
+          avatar: { type: 'string', nullable: true },
+          specialty: { type: 'string' },
+          location: { type: 'string' },
+          inscription: { type: 'string', format: 'date-time' },
+          accountStatus: { type: 'string', enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'] },
+          kycStatus: { type: 'string', enum: ['BROUILLON', 'SOUMIS', 'EN_ATTENTE', 'VALIDE', 'REJETE', 'CORRECTION_REQUISE', 'EXPIRE'], nullable: true },
+          kycId: { type: 'string', format: 'uuid', nullable: true },
+          artworksCount: { type: 'integer' },
+          grossOrderVolume: { type: 'number', description: "Volume brut des commandes (tous statuts) : n'est pas un chiffre d'affaires encaissé." },
+        },
+      },
+      AdminArtisanListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          items: { type: 'array', items: { $ref: '#/components/schemas/AdminArtisanListItem' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+        },
+      },
+      AdminArtisanDetailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          artisan: {
+            type: 'object',
+            properties: {
+              profil: {
+                type: 'object',
+                properties: {
+                  userId: { type: 'string', format: 'uuid' },
+                  nom: { type: 'string', nullable: true },
+                  email: { type: 'string', nullable: true },
+                  telephone: { type: 'string' },
+                  accountStatus: { type: 'string', enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'] },
+                  inscription: { type: 'string', format: 'date-time' },
+                },
+              },
+              artisan: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  type: { type: 'string', enum: ['ARTISAN', 'ARTISTE'] },
+                  nomAtelier: { type: 'string' },
+                  specialite: { type: 'string' },
+                  biographie: { type: 'string' },
+                  localisation: { type: 'string' },
+                  anneesExperience: { type: 'integer' },
+                  estCertifie: { type: 'boolean' },
+                  scoreFiabilite: { type: 'number', nullable: true },
+                  photoAtelierUrl: { type: 'string', nullable: true },
+                  validatedAt: { type: 'string', format: 'date-time', nullable: true },
+                  createdAt: { type: 'string', format: 'date-time' },
+                },
+              },
+              kyc: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  status: { type: 'string', enum: ['BROUILLON', 'SOUMIS', 'EN_ATTENTE', 'VALIDE', 'REJETE', 'CORRECTION_REQUISE', 'EXPIRE'] },
+                  submittedAt: { type: 'string', format: 'date-time', nullable: true },
+                  reviewedAt: { type: 'string', format: 'date-time', nullable: true },
+                },
+                description: "Synthèse du dernier dossier KYC, sans pièces jointes (documents accessibles uniquement via l'API KYC dédiée).",
+              },
+              statistiques: {
+                type: 'object',
+                properties: {
+                  totalOeuvres: { type: 'integer' },
+                  publiees: { type: 'integer' },
+                  enPanier: { type: 'integer' },
+                  vendues: { type: 'integer' },
+                  nbCommandesArtisan: { type: 'integer' },
+                  grossOrderVolume: { type: 'number', description: "Volume brut des commandes (tous statuts) : n'est pas un chiffre d'affaires encaissé." },
+                },
+              },
+            },
+          },
+        },
+      },
+      AdminArtisanArtwork: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          titre: { type: 'string' },
+          statut: { type: 'string', enum: ['BROUILLON', 'EN_ATTENTE_VALIDATION', 'PUBLIEE', 'EN_PANIER', 'VENDUE', 'RETIREE'] },
+          prixXOF: { type: 'number' },
+          createdAt: { type: 'string', format: 'date-time' },
+          coverUrl: { type: 'string', nullable: true },
+        },
+      },
+      AdminArtisanArtworksResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          items: { type: 'array', items: { $ref: '#/components/schemas/AdminArtisanArtwork' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+        },
+      },
+      AdminArtisanOrder: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          statut: { type: 'string', enum: ['COMMANDE', 'PREPARATION', 'EXPEDIEE', 'LIVREE', 'CLOTUREE', 'ANNULEE', 'REMBOURSEE'] },
+          sousTotal: { type: 'number' },
+          commission: { type: 'number' },
+          fraisLivraison: { type: 'number' },
+          montantTotal: { type: 'number' },
+          createdAt: { type: 'string', format: 'date-time' },
+          commande: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              statut: { type: 'string', enum: ['COMMANDE', 'PREPARATION', 'EXPEDIEE', 'LIVREE', 'CLOTUREE', 'ANNULEE', 'REMBOURSEE'] },
+              dateCreation: { type: 'string', format: 'date-time' },
+              createdAt: { type: 'string', format: 'date-time' },
+              acheteur: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  typeClient: { type: 'string' },
+                  nom: { type: 'string', nullable: true },
+                },
+              },
+            },
+          },
+        },
+      },
+      AdminArtisanOrdersResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          items: { type: 'array', items: { $ref: '#/components/schemas/AdminArtisanOrder' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+        },
       },
     },
   },

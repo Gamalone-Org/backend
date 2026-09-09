@@ -95,8 +95,6 @@ export class UserController {
     try {
       const query = listUsersQuerySchema.parse(req.query);
       const { csv } = await this.service.exportUsers(actorFrom(req), {
-        page: 1,
-        limit: 100,
         q: query.q,
         role: query.role,
         statut: query.statut,
@@ -105,7 +103,7 @@ export class UserController {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader(
         'Content-Disposition',
-        'attachment; filename="utilisateurs.csv"'
+        `attachment; filename="utilisateurs-${Date.now()}.csv"`
       );
       res.status(200).send(csv);
     } catch (error) {

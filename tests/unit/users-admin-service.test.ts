@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { UserService } from '../../src/modules/users/users.service';
+import { CSV_EXPORT_LIMIT, UserService } from '../../src/modules/users/users.service';
 import { UserRepository } from '../../src/modules/users/users.repository';
 import { ForbiddenError, NotFoundError } from '../../src/common/errors/AppError';
 
@@ -52,6 +52,7 @@ function buildService(overrides: Partial<UserRepository> = {}) {
     changeRole: vi.fn(),
     listUsers: vi.fn(),
     exportUsers: vi.fn(),
+    findForExport: vi.fn(),
     ...overrides,
   } as unknown as UserRepository;
   const service = new UserService(repository);
@@ -248,6 +249,57 @@ describe('UserService - RBAC & anti-escalation', () => {
         NotFoundError
       );
       expect(repository.changeRole).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('enveloppe de liste & pagination', () => {
+    it('calcule totalPages depuis total et limit', async () => {
+      const { service, repository } = buildService();
+      repository.listUsers.mockResolvedValue({ items: [], total: 20, page: 2, limit: 10 });
+      const result = await service.listUsers(ACTOR_SUPPORT, { page: 2, limit: 10 });
+      expect(result).toEqual({ items: [], total: 20, page: 2, limit: 10, totalPages: 2 });
+    });
+
+    it('renvoie totalPages = 0 quand total = 0', async () => {
+      const { service, repository } = buildService();
+      repository.listUsers.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 });
+      const result = await service.listUsers(ACTOR_SUPPORT, { page: 1, limit: 20 });
+      expect(result.totalPages).toBe(0);
+    });
+  });
+
+  describe('export CSV', () => {
+    it('exporte via findForExport (filtres identiques, sans pagination client)', async () => {
+      const { service, repository } = buildService();
+      repository.findForExport.mockResolvedValue([makeUser()]);
+      const { csv } = await service.exportUsers(ACTOR_SUPPORT, { q: 'awa', bloques: true });
+      expect(repository.findForExport).toHaveBeenCalledWith(
+        { q: 'awa', bloques: true },
+        CSV_EXPORT_LIMIT
+      );
+      expect(csv).toContain(
+        'id,nom,email,telephone,role,statut,inscription,niveau_admin,profil'
+      );
+      expect(csv).toContain('ACHETEUR');
+      expect(csv).toContain('+22890123456');
+    });
+
+    it('refuse l’export à un non-ADMIN', async () => {
+      const { service, repository } = buildService();
+      await expect(service.exportUsers({ id: 'x', role: 'ACHETEUR' }, {})).rejects.toBeInstanceOf(
+        ForbiddenError
+      );
+      expect(repository.findForExport).not.toHaveBeenCalled();
+    });
+
+    it('échappe virgules et guillemets dans les cellules', async () => {
+      const { service, repository } = buildService();
+      repository.findForExport.mockResolvedValue([
+        makeUser({ nom: 'Mensah, "Awa"', email: 'a@b.c,suite' }),
+      ]);
+      const { csv } = await service.exportUsers(ACTOR_SUPPORT, {});
+      expect(csv).toContain('"Mensah, ""Awa"""');
+      expect(csv).toContain('"a@b.c,suite"');
     });
   });
 });

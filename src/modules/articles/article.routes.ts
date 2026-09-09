@@ -47,6 +47,7 @@ adminArticleRouter.use(requireAuth, requireRole('ADMIN'));
 
 // SUPPORT : lecture seule
 adminArticleRouter.get('/', requireAdminLevel('SUPPORT'), controller.list);
+adminArticleRouter.get('/export', requireAdminLevel('SUPPORT'), controller.exportArticles);
 adminArticleRouter.get('/:id', requireAdminLevel('SUPPORT'), controller.getOne);
 
 // MODERATEUR : écriture + workflow + médias

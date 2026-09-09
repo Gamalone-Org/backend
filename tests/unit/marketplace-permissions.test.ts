@@ -6,6 +6,7 @@ function buildService(overrides = {}) {
   const repository = {
     findArtisanProfileById: vi.fn(),
     findArtisanProfileByUserId: vi.fn(),
+    findKycValidForUser: vi.fn(),
     findCategorieById: vi.fn(),
     findById: vi.fn(),
     countMedias: vi.fn(),
@@ -22,7 +23,10 @@ function buildService(overrides = {}) {
   return { service: new OeuvreService(repository), repository };
 }
 
-const validArtisanProfile = { id: 'artisan-1', user: { role: 'ARTISAN', statut: 'ACTIF' } };
+const validArtisanProfile = {
+  id: 'artisan-1',
+  user: { id: 'user-1', role: 'ARTISAN', statut: 'ACTIF' },
+};
 
 describe('OeuvreService permissions & admin levels', () => {
   beforeEach(() => {
@@ -32,6 +36,7 @@ describe('OeuvreService permissions & admin levels', () => {
   it('allows create when artisan profile is valid', async () => {
     const { service, repository } = buildService();
     repository.findArtisanProfileById.mockResolvedValue(validArtisanProfile);
+    repository.findKycValidForUser.mockResolvedValue({ id: 'kyc-1', status: 'VALIDE' });
     repository.findCategorieById.mockResolvedValue({ id: 'cat-1' });
     repository.create.mockResolvedValue({ id: 'oeuvre-1' });
 
@@ -109,7 +114,9 @@ describe('OeuvreService permissions & admin levels', () => {
   it('allows admin publish when profile is valid and oeuvre has media', async () => {
     const { service, repository } = buildService();
     repository.findAdminProfileByUserId.mockResolvedValue({ id: 'admin-profile-1' });
-    repository.findById.mockResolvedValue({ id: 'oeuvre-1', statut: 'BROUILLON' });
+    repository.findById.mockResolvedValue({ id: 'oeuvre-1', statut: 'BROUILLON', artisanId: 'artisan-1' });
+    repository.findArtisanProfileById.mockResolvedValue(validArtisanProfile);
+    repository.findKycValidForUser.mockResolvedValue({ id: 'kyc-1', status: 'VALIDE' });
     repository.countMedias.mockResolvedValue(1);
     repository.publish.mockResolvedValue({ statut: 'PUBLIEE' });
 
@@ -138,7 +145,9 @@ describe('OeuvreService permissions & admin levels', () => {
   it('publish rejects when no OEUVRE media', async () => {
     const { service, repository } = buildService();
     repository.findAdminProfileByUserId.mockResolvedValue({ id: 'admin-profile-1' });
-    repository.findById.mockResolvedValue({ id: 'oeuvre-1', statut: 'BROUILLON' });
+    repository.findById.mockResolvedValue({ id: 'oeuvre-1', statut: 'BROUILLON', artisanId: 'artisan-1' });
+    repository.findArtisanProfileById.mockResolvedValue(validArtisanProfile);
+    repository.findKycValidForUser.mockResolvedValue({ id: 'kyc-1', status: 'VALIDE' });
     repository.countMedias.mockResolvedValue(0);
 
     await expect(service.publishOeuvre('admin-user', 'oeuvre-1')).rejects.toThrow(ConflictError);

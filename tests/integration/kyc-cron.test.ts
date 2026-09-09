@@ -55,19 +55,25 @@ afterEach(() => {
 });
 
 describe('Vercel cron purge entrypoint', () => {
+  // Le module app.js est ré-importé à froid à l'intérieur de chaque test via
+  // vi.resetModules() (contrairement aux autres tests qui l'importent au
+  // niveau racine hors budget de test) : un timeout supérieur au défaut
+  // (5000 ms) évite les faux positifs de démarrage à froid.
+  const BOOT_TIMEOUT = 15000;
+
   it('is disabled (404) when no CRON_SECRET is configured', async () => {
     const app = await loadApp();
     const response = await request(app).get(URL);
     expect(response.status).toBe(404);
     expect(mockRunPurge).not.toHaveBeenCalled();
-  });
+  }, BOOT_TIMEOUT);
 
   it('rejects a wrong Authorization bearer secret (401)', async () => {
     const app = await loadApp('top-secret-cron-key');
     const response = await request(app).get(URL).set('Authorization', 'Bearer wrong-key');
     expect(response.status).toBe(401);
     expect(mockRunPurge).not.toHaveBeenCalled();
-  });
+  }, BOOT_TIMEOUT);
 
   it('runs the purge with a valid Authorization bearer secret', async () => {
     const app = await loadApp('top-secret-cron-key');
@@ -76,19 +82,19 @@ describe('Vercel cron purge entrypoint', () => {
     expect(response.body).toMatchObject({ success: true });
     expect(response.body.result.batches).toBe(2);
     expect(mockRunPurge).toHaveBeenCalledTimes(1);
-  });
+  }, BOOT_TIMEOUT);
 
   it('accepts the x-cron-secret header as an alternative', async () => {
     const app = await loadApp('top-secret-cron-key');
     const response = await request(app).get(URL).set('x-cron-secret', 'top-secret-cron-key');
     expect(response.status).toBe(200);
     expect(mockRunPurge).toHaveBeenCalledTimes(1);
-  });
+  }, BOOT_TIMEOUT);
 
   it('rejects a missing secret header (401)', async () => {
     const app = await loadApp('top-secret-cron-key');
     const response = await request(app).get(URL);
     expect(response.status).toBe(401);
     expect(mockRunPurge).not.toHaveBeenCalled();
-  });
+  }, BOOT_TIMEOUT);
 });

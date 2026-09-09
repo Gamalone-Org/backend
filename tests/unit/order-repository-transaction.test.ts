@@ -1,13 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrderRepository } from '../../src/modules/orders/order.repository.js';
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function createTransactionMock() {
   return {
+    $executeRaw: vi.fn(),
     commande: {
       create: vi.fn(),
     },
     oeuvre: {
       updateMany: vi.fn(),
+    },
+    commandeArtisan: {
+      create: vi.fn(),
+    },
+    ligneCommande: {
+      create: vi.fn(),
     },
   } as any;
 }
@@ -24,12 +35,38 @@ function buildRepository(mockTx = createTransactionMock()) {
 
 const OEUVRE_1 = '123e4567-e89b-12d3-a456-426614174000';
 const OEUVRE_2 = '123e4567-e89b-12d3-a456-426614174001';
+const ARTISAN_1 = '123e4567-e89b-12d3-a456-426614174111';
+const ARTISAN_2 = '123e4567-e89b-12d3-a456-426614174222';
 
 const data = {
   acheteurId: 'buyer-1',
   lignes: [
-    { oeuvreId: OEUVRE_1, artisanId: 'artisan-1', prixUnitaire: 10000, quantite: 2 },
-    { oeuvreId: OEUVRE_2, artisanId: 'artisan-2', prixUnitaire: 5000, quantite: 1 },
+    { oeuvreId: OEUVRE_1, artisanId: ARTISAN_1, prixUnitaire: 10000, quantite: 2 },
+    { oeuvreId: OEUVRE_2, artisanId: ARTISAN_2, prixUnitaire: 5000, quantite: 1 },
+  ],
+  commandesArtisans: [
+    {
+      artisanId: ARTISAN_1,
+      statut: 'COMMANDE' as const,
+      sousTotal: 20000,
+      commission: 2000,
+      fraisLivraison: 1500,
+      montantTotal: 21500,
+      lignes: [
+        { oeuvreId: OEUVRE_1, artisanId: ARTISAN_1, prixUnitaire: 10000, quantite: 2 },
+      ],
+    },
+    {
+      artisanId: ARTISAN_2,
+      statut: 'COMMANDE' as const,
+      sousTotal: 5000,
+      commission: 500,
+      fraisLivraison: 1000,
+      montantTotal: 6000,
+      lignes: [
+        { oeuvreId: OEUVRE_2, artisanId: ARTISAN_2, prixUnitaire: 5000, quantite: 1 },
+      ],
+    },
   ],
   sousTotal: 25000,
   fraisLivraison: 2500,
@@ -40,6 +77,9 @@ const data = {
   transporteur: 'DHL',
 };
 
+// ---------------------------------------------------------------------------
+// A. Atomicité de la transaction
+// ---------------------------------------------------------------------------
 describe('OrderRepository.createCommande atomicity', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -47,8 +87,11 @@ describe('OrderRepository.createCommande atomicity', () => {
 
   it('creates the order, its lines, payment and delivery in one transaction', async () => {
     const { repository, prisma, mockTx } = buildRepository();
+    mockTx.$executeRaw.mockResolvedValue(2);
     mockTx.commande.create.mockResolvedValue({ id: 'cmd-1' });
-    mockTx.oeuvre.updateMany.mockResolvedValue({ count: 2 });
+    mockTx.commandeArtisan.create.mockResolvedValue({ id: 'ca-1' });
+    mockTx.ligneCommande.create.mockResolvedValue({ id: 'lc-1' });
+    mockTx.$executeRaw.mockResolvedValueOnce(2).mockResolvedValueOnce(undefined);
 
     const result = await repository.createCommande(data);
 
@@ -59,40 +102,170 @@ describe('OrderRepository.createCommande atomicity', () => {
         montantTotal: 27500,
         commission: 2500,
         fraisLivraison: 2500,
-        lignesCommande: {
-          create: [
-            { oeuvreId: OEUVRE_1, artisanId: 'artisan-1', prixUnitaire: 10000, quantite: 2 },
-            { oeuvreId: OEUVRE_2, artisanId: 'artisan-2', prixUnitaire: 5000, quantite: 1 },
-          ],
-        },
       }),
     });
     expect(result.id).toBe('cmd-1');
   });
 
-  it('marks the ordered artworks as VENDUES within the same transaction', async () => {
-    const { repository, prisma, mockTx } = buildRepository();
+  it('uses atomic UPDATE to reserve artworks before creating the order', async () => {
+    const { repository, mockTx } = buildRepository();
+    mockTx.$executeRaw.mockResolvedValueOnce(2).mockResolvedValueOnce(undefined);
     mockTx.commande.create.mockResolvedValue({ id: 'cmd-1' });
-    mockTx.oeuvre.updateMany.mockResolvedValue({ count: 2 });
+    mockTx.commandeArtisan.create.mockResolvedValue({ id: 'ca-1' });
+    mockTx.ligneCommande.create.mockResolvedValue({ id: 'lc-1' });
 
     await repository.createCommande(data);
 
-    expect(mockTx.oeuvre.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [OEUVRE_1, OEUVRE_2] } },
-      data: { statut: 'VENDUE' },
-    });
-    // Both the commande creation and the part of the artworks happen within the single transaction.
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    // Première requête : atomique UPDATE ... WHERE statut = 'PUBLIEE'
+    expect(mockTx.$executeRaw).toHaveBeenCalledTimes(1);
+    const firstCall = mockTx.$executeRaw.mock.calls[0]![0];
+    expect(firstCall[0]).toContain('EN_PANIER');
+    expect(firstCall.join('')).toContain('PUBLIEE');
   });
 
   it('rolls back the whole transaction when the commande creation fails', async () => {
     const { repository, prisma, mockTx } = buildRepository();
+    mockTx.$executeRaw.mockResolvedValueOnce(2);
     mockTx.commande.create.mockRejectedValue(new Error('P2003'));
 
     await expect(repository.createCommande(data)).rejects.toThrow('P2003');
-
-    // The updateMany never runs because the transaction aborts before reaching it.
-    expect(mockTx.oeuvre.updateMany).not.toHaveBeenCalled();
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B. Protection concurrence atomique
+// ---------------------------------------------------------------------------
+describe('OrderRepository.createCommande atomic purchase protection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('rejects purchase when an artwork is already EN_PANIER (concurrent reservation)', async () => {
+    const { repository, mockTx } = buildRepository();
+    // UPDATE ne matche que 1 œuvre sur 2 demandées (la 2e est déjà EN_PANIER)
+    mockTx.$executeRaw.mockResolvedValueOnce(1);
+    // Rollback partiel : remet l'œuvre réservée en PUBLIEE
+    mockTx.$executeRaw.mockResolvedValueOnce(undefined);
+
+    await expect(repository.createCommande(data)).rejects.toThrow('CONCURRENT_PURCHASE');
+    expect(mockTx.commande.create).not.toHaveBeenCalled();
+    expect(mockTx.oeuvre.updateMany).not.toHaveBeenCalled(); // Pas de passage VENDUE anticipé
+  });
+
+  it('rejects purchase when an artwork is VENDUE (concurrent purchase)', async () => {
+    const { repository, mockTx } = buildRepository();
+    // UPDATE ne matche aucune ligne (toutes VENDUE)
+    mockTx.$executeRaw.mockResolvedValueOnce(0);
+
+    await expect(repository.createCommande(data)).rejects.toThrow('CONCURRENT_PURCHASE');
+    expect(mockTx.commande.create).not.toHaveBeenCalled();
+  });
+
+  it('rolls back partial reservation when one artwork is unavailable', async () => {
+    const { repository, mockTx } = buildRepository();
+    // 1 œuvre réservée, 1 échoue
+    mockTx.$executeRaw.mockResolvedValueOnce(1);
+    // Rollback partiel
+    mockTx.$executeRaw.mockResolvedValueOnce(undefined);
+
+    await expect(repository.createCommande(data)).rejects.toThrow('CONCURRENT_PURCHASE');
+    // Le rollback partiel doit être appelé pour remettre l'œuvre réservée en PUBLIEE
+    expect(mockTx.$executeRaw).toHaveBeenCalledTimes(2);
+  });
+
+  it('creates CommandeArtisan entries for each artisan group', async () => {
+    const { repository, mockTx } = buildRepository();
+    mockTx.$executeRaw.mockResolvedValueOnce(2).mockResolvedValueOnce(undefined);
+    mockTx.commande.create.mockResolvedValue({ id: 'cmd-1' });
+    mockTx.commandeArtisan.create.mockResolvedValue({ id: 'ca-1' });
+    mockTx.ligneCommande.create.mockResolvedValue({ id: 'lc-1' });
+
+    await repository.createCommande(data);
+
+    expect(mockTx.commandeArtisan.create).toHaveBeenCalledTimes(2);
+    expect(mockTx.commandeArtisan.create).toHaveBeenCalledWith({
+      data: {
+        commandeId: 'cmd-1',
+        artisanId: ARTISAN_1,
+        statut: 'COMMANDE',
+        sousTotal: 20000,
+        commission: 2000,
+        fraisLivraison: 1500,
+        montantTotal: 21500,
+      },
+    });
+    expect(mockTx.commandeArtisan.create).toHaveBeenCalledWith({
+      data: {
+        commandeId: 'cmd-1',
+        artisanId: ARTISAN_2,
+        statut: 'COMMANDE',
+        sousTotal: 5000,
+        commission: 500,
+        fraisLivraison: 1000,
+        montantTotal: 6000,
+      },
+    });
+  });
+
+  it('creates LigneCommande entries linked to CommandeArtisan', async () => {
+    const { repository, mockTx } = buildRepository();
+    mockTx.$executeRaw.mockResolvedValueOnce(2).mockResolvedValueOnce(undefined);
+    mockTx.commande.create.mockResolvedValue({ id: 'cmd-1' });
+    mockTx.commandeArtisan.create
+      .mockResolvedValueOnce({ id: 'ca-1' })
+      .mockResolvedValueOnce({ id: 'ca-2' });
+    mockTx.ligneCommande.create.mockResolvedValue({ id: 'lc-1' });
+
+    await repository.createCommande(data);
+
+    expect(mockTx.ligneCommande.create).toHaveBeenCalledTimes(2);
+    expect(mockTx.ligneCommande.create).toHaveBeenCalledWith({
+      data: {
+        commandeId: 'cmd-1',
+        commandeArtisanId: 'ca-1',
+        oeuvreId: OEUVRE_1,
+        artisanId: ARTISAN_1,
+        prixUnitaire: 10000,
+        quantite: 2,
+      },
+    });
+    expect(mockTx.ligneCommande.create).toHaveBeenCalledWith({
+      data: {
+        commandeId: 'cmd-1',
+        commandeArtisanId: 'ca-2',
+        oeuvreId: OEUVRE_2,
+        artisanId: ARTISAN_2,
+        prixUnitaire: 5000,
+        quantite: 1,
+      },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C. Rollback complet
+// ---------------------------------------------------------------------------
+describe('OrderRepository.createCommande full rollback', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not create commande when atomic reservation fails', async () => {
+    const { repository, mockTx } = buildRepository();
+    mockTx.$executeRaw.mockResolvedValueOnce(0);
+
+    await expect(repository.createCommande(data)).rejects.toThrow();
+    expect(mockTx.commande.create).not.toHaveBeenCalled();
+    expect(mockTx.commandeArtisan.create).not.toHaveBeenCalled();
+    expect(mockTx.ligneCommande.create).not.toHaveBeenCalled();
+  });
+
+  it('does not create payment or delivery when reservation fails', async () => {
+    const { repository, mockTx } = buildRepository();
+    mockTx.$executeRaw.mockResolvedValueOnce(0);
+
+    await expect(repository.createCommande(data)).rejects.toThrow();
+    expect(mockTx.commande.create).not.toHaveBeenCalled();
   });
 });

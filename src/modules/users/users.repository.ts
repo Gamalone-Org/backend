@@ -7,14 +7,19 @@ import {
   type UserStatus,
 } from '../../generated/prisma/client.js';
 
-export type ListUsersOptions = {
-  page: number;
-  limit: number;
+export type UserFilters = {
   q?: string;
   role?: UserRole;
   statut?: UserStatus;
   bloques?: boolean;
 };
+
+export type ListUsersOptions = UserFilters & {
+  page: number;
+  limit: number;
+};
+
+export type ExportUsersOptions = UserFilters;
 
 type CreateBuyerProfileInput = {
   adresseLivraison?: string;
@@ -56,17 +61,62 @@ const USER_SUMMARY_SELECT = {
   updatedAt: true,
 } satisfies Prisma.UserSelect;
 
+const USER_DETAIL_SELECT = {
+  id: true,
+  email: true,
+  nom: true,
+  telephone: true,
+  statut: true,
+  role: true,
+  telephoneVerificationStatus: true,
+  telephoneVerifiedAt: true,
+  anonymizedAt: true,
+  deletedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  buyerProfile: true,
+  artisanProfile: true,
+  adminProfile: true,
+} satisfies Prisma.UserSelect;
+
+const USER_LIST_SELECT = {
+  ...USER_SUMMARY_SELECT,
+  artisanProfile: {
+    select: { id: true, nomAtelier: true, specialite: true, estCertifie: true },
+  },
+  buyerProfile: {
+    select: { id: true, typeClient: true, adresseLivraison: true },
+  },
+  adminProfile: {
+    select: { id: true, niveauAcces: true },
+  },
+} satisfies Prisma.UserSelect;
+
+function buildUserWhere(options: UserFilters): Prisma.UserWhereInput {
+  return {
+    deletedAt: null,
+    ...(options.role ? { role: options.role } : {}),
+    ...(options.statut ? { statut: options.statut } : {}),
+    ...(options.bloques === true ? { statut: 'SUSPENDU' } : {}),
+    ...(options.q
+      ? {
+          OR: [
+            { nom: { contains: options.q, mode: 'insensitive' } },
+            { email: { contains: options.q, mode: 'insensitive' } },
+            { telephone: { contains: options.q } },
+          ],
+        }
+      : {}),
+  };
+}
+
 export class UserRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   async findById(id: string) {
     return this.prisma.user.findFirst({
       where: { id, deletedAt: null },
-      include: {
-        buyerProfile: true,
-        artisanProfile: true,
-        adminProfile: true,
-      },
+      select: USER_DETAIL_SELECT,
     });
   }
 
@@ -114,7 +164,7 @@ export class UserRepository {
         });
         return tx.user.findUniqueOrThrow({
           where: { id: user.id },
-          include: { artisanProfile: true, buyerProfile: true, adminProfile: true },
+          select: USER_DETAIL_SELECT,
         });
       });
     }
@@ -131,7 +181,7 @@ export class UserRepository {
         });
         return tx.user.findUniqueOrThrow({
           where: { id: user.id },
-          include: { artisanProfile: true, buyerProfile: true, adminProfile: true },
+          select: USER_DETAIL_SELECT,
         });
       });
     }
@@ -150,14 +200,14 @@ export class UserRepository {
         });
         return tx.user.findUniqueOrThrow({
           where: { id: user.id },
-          include: { artisanProfile: true, buyerProfile: true, adminProfile: true },
+          select: USER_DETAIL_SELECT,
         });
       });
     }
 
     return this.prisma.user.create({
       data: baseUserData,
-      include: { artisanProfile: true, buyerProfile: true, adminProfile: true },
+      select: USER_DETAIL_SELECT,
     });
   }
 
@@ -165,7 +215,7 @@ export class UserRepository {
     return this.prisma.user.update({
       where: { id },
       data: { statut },
-      include: { artisanProfile: true, buyerProfile: true, adminProfile: true },
+      select: USER_DETAIL_SELECT,
     });
   }
 
@@ -173,7 +223,7 @@ export class UserRepository {
     return this.prisma.user.update({
       where: { id },
       data: { role },
-      include: { artisanProfile: true, buyerProfile: true, adminProfile: true },
+      select: USER_DETAIL_SELECT,
     });
   }
 
@@ -201,7 +251,7 @@ export class UserRepository {
       return tx.user.update({
         where: { id },
         data: { role },
-        include: { artisanProfile: true, buyerProfile: true, adminProfile: true },
+        select: USER_DETAIL_SELECT,
       });
     });
   }
@@ -224,22 +274,7 @@ export class UserRepository {
   }
 
   async listUsers(options: ListUsersOptions) {
-    const where: Prisma.UserWhereInput = {
-      deletedAt: null,
-      ...(options.role ? { role: options.role } : {}),
-      ...(options.statut ? { statut: options.statut } : {}),
-      ...(options.bloques === true ? { statut: 'SUSPENDU' } : {}),
-      ...(options.q
-        ? {
-            OR: [
-              { nom: { contains: options.q, mode: 'insensitive' } },
-              { email: { contains: options.q, mode: 'insensitive' } },
-              { telephone: { contains: options.q } },
-            ],
-          }
-        : {}),
-    };
-
+    const where = buildUserWhere(options);
     const orderBy: Prisma.UserOrderByWithRelationInput = { createdAt: 'desc' };
 
     const [total, items] = await this.prisma.$transaction([
@@ -249,21 +284,20 @@ export class UserRepository {
         orderBy,
         skip: (options.page - 1) * options.limit,
         take: options.limit,
-        select: {
-          ...USER_SUMMARY_SELECT,
-          artisanProfile: {
-            select: { id: true, nomAtelier: true, specialite: true, estCertifie: true },
-          },
-          buyerProfile: {
-            select: { id: true, typeClient: true, adresseLivraison: true },
-          },
-          adminProfile: {
-            select: { id: true, niveauAcces: true },
-          },
-        },
+        select: USER_LIST_SELECT,
       }),
     ]);
 
     return { items, total, page: options.page, limit: options.limit };
+  }
+
+  async findForExport(options: ExportUsersOptions, limit: number) {
+    const where = buildUserWhere(options);
+    return this.prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: USER_LIST_SELECT,
+    });
   }
 }

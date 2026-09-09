@@ -20,6 +20,11 @@ import {
   adminArticleRouter,
 } from '../modules/articles/article.routes.js';
 import { adminUserRouter } from '../modules/users/users.routes.js';
+import { adminDashboardRouter } from '../modules/admin/dashboard/dashboard.routes.js';
+import { adminArtisansRouter } from '../modules/admin/artisans/admin-artisans.routes.js';
+import { adminDeliveryRouter } from '../modules/deliveries/delivery.routes.js';
+import { adminReviewRouter } from '../modules/reviews/review.routes.js';
+import { adminDisputeRouter } from '../modules/disputes/dispute.routes.js';
 
 const router = Router();
 
@@ -52,5 +57,15 @@ router.use('/v1/admin/commandes', adminCommandeRouter);
 router.use('/v1/admin/articles', adminArticleRouter);
 
 router.use('/v1/admin/users', adminUserRouter);
+
+router.use('/v1/admin/dashboard', adminDashboardRouter);
+
+router.use('/v1/admin/artisans', adminArtisansRouter);
+
+router.use('/v1/admin/livraisons', adminDeliveryRouter);
+
+router.use('/v1/admin/avis', adminReviewRouter);
+
+router.use('/v1/admin/litiges', adminDisputeRouter);
 
 export default router;
