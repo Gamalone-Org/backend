@@ -35,25 +35,26 @@
 
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
-import { Pool } from 'pg';
 import { env } from './env.js';
 
+/**
+ * Database configuration
+ */
 export const databaseConfig = {
   url: env.DATABASE_URL,
   isDevelopment: env.NODE_ENV === 'development',
 };
+
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
 
-const pool = new Pool({
+const adapter = new PrismaPg({
   connectionString: env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false,
   },
 });
-
-const adapter = new PrismaPg(pool);
 
 export const prisma =
   globalForPrisma.prisma ??
@@ -64,4 +65,3 @@ export const prisma =
 if (env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
-
