@@ -14,10 +14,7 @@ const mediaService = new MediaService(mediaRepository, oeuvreRepository);
 const controller = new OeuvreController(oeuvreService, mediaService);
 
 export const publicOeuvreRouter = Router();
-export const publicArtisanRouter = Router();
 
 publicOeuvreRouter.get('/', controller.listPublic);
 publicOeuvreRouter.get('/featured', controller.listFeatured);
 publicOeuvreRouter.get('/:id', controller.getPublic);
-
-publicArtisanRouter.get('/:artisanId/oeuvres', controller.listByArtisanPublic);

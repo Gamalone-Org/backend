@@ -1,8 +1,19 @@
-import { NotFoundError } from '../../common/errors/AppError.js';
+import { ConflictError, NotFoundError } from '../../common/errors/AppError.js';
 import type { DeliveryStatus } from '../../generated/prisma/client.js';
 import { DeliveryRepository, type DeliveryFilters, type DeliveryUpdateData } from './delivery.repository.js';
 
 export const CSV_EXPORT_LIMIT = 5000;
+
+// Transitions autorisées pour le statut de livraison : progression avant
+// uniquement. ECHEC autorise une relance via EN_TRANSIT. Aucune régression.
+const ALLOWED_DELIVERY_TRANSITIONS: Record<DeliveryStatus, DeliveryStatus[]> = {
+  EN_ATTENTE: ['PREPAREE', 'ECHEC'],
+  PREPAREE: ['EXPEDIEE', 'ECHEC'],
+  EXPEDIEE: ['EN_TRANSIT', 'ECHEC'],
+  EN_TRANSIT: ['LIVREE', 'ECHEC'],
+  LIVREE: [],
+  ECHEC: ['EN_TRANSIT'],
+};
 
 /**
  * Orchestration de la logistique admin (Phase 1 : gestion interne manuelle).
@@ -41,6 +52,14 @@ export class DeliveryService {
     if (!existing) {
       throw new NotFoundError('Livraison introuvable');
     }
+
+    const allowed = ALLOWED_DELIVERY_TRANSITIONS[existing.statut];
+    if (!allowed.includes(statut)) {
+      throw new ConflictError(
+        `Transition de statut de livraison invalide : ${existing.statut} → ${statut}`
+      );
+    }
+
     return this.repository.updateStatus(id, statut);
   }
 

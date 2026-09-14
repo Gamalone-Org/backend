@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
-import type { AdminAccessLevel } from '../../../generated/prisma/client.js';
+import type { AdminAccessLevel, AdminPermission } from '../../../generated/prisma/client.js';
 import { hasMinAdminAccessLevel } from '../../../config/kyc.js';
+import { isPrivilegedPermission } from '../../../config/admin-permissions.js';
 import { JwtService } from '../services/JwtService.js';
 import { AuthRepository } from '../repositories/AuthRepository.js';
 import { prisma } from '../../../config/database.js';
@@ -133,5 +134,73 @@ export function requireAdminLevel(minimumLevel: AdminAccessLevel) {
     }
 
     next();
+  };
+}
+
+/**
+ * Vérifie que l'utilisateur authentifié est un administrateur disposant de
+ * TOUTES les permissions demandées (sémantique ET, plusieurs permissions dans
+ * une même route = le cumul est requis).
+ *
+ * Règles de défense en profondeur :
+ * - le SUPER_ADMIN possède par nature toutes les permissions (OPTION A, aucun
+ *   enregistrement nécessaire dans admin_profile_permissions) ;
+ * - les permissions privilégiées ADMINS_* ne peuvent être exercées QUE par un
+ *   SUPER_ADMIN : un ADMIN simple ne peut pas les obtenir, même si une
+ *   attribution erronée existerait en base ;
+ * - un profil AdminProfil manquant ou inactif refuse l'accès.
+ */
+export function requirePermission(...permissions: AdminPermission[]) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      next(new UnauthorizedError('Authentication required'));
+      return;
+    }
+
+    if (req.user.role !== 'ADMIN') {
+      next(new ForbiddenError('Admin access required'));
+      return;
+    }
+
+    if (!req.user.adminProfileId || !req.user.adminAccessLevel) {
+      next(new ForbiddenError('Admin profile required'));
+      return;
+    }
+
+    if (permissions.length === 0) {
+      next(new ForbiddenError('At least one permission is required'));
+      return;
+    }
+
+    // Le SUPER_ADMIN possède toutes les permissions par nature.
+    if (req.user.adminAccessLevel === 'SUPER_ADMIN') {
+      next();
+      return;
+    }
+
+    // Règle anti-escalade : les permissions ADMINS_* sont strictement réservées
+    // au SUPER_ADMIN. La vérification se fait AVANT la requête en base pour
+    // garantir qu'aucun ADMIN simple ne puisse les exercer.
+    if (permissions.some((permission) => isPrivilegedPermission(permission))) {
+      next(new ForbiddenError('Insufficient permissions'));
+      return;
+    }
+
+    void (async () => {
+      try {
+        const stored = await authRepository.findAdminPermissionsByProfileId(
+          req.user!.adminProfileId!
+        );
+        const owned = new Set<string>(stored.map((p) => p.permission));
+        const allowed = permissions.every((permission) => owned.has(permission));
+        if (!allowed) {
+          next(new ForbiddenError('Insufficient permissions'));
+          return;
+        }
+        next();
+      } catch (error) {
+        next(error instanceof Error ? error : new ForbiddenError('Insufficient permissions'));
+      }
+    })();
   };
 }

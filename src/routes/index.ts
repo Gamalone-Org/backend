@@ -10,21 +10,21 @@ import {
 } from '../modules/categories/categorie.routes.js';
 import { artisanOeuvreRouter } from '../modules/marketplace/oeuvre.routes.js';
 import { adminOeuvreRouter } from '../modules/marketplace/oeuvre.admin.routes.js';
-import {
-  publicOeuvreRouter,
-  publicArtisanRouter,
-} from '../modules/marketplace/oeuvre.public.routes.js';
+import { publicOeuvreRouter } from '../modules/marketplace/oeuvre.public.routes.js';
+import { artisanPublicRouter } from '../modules/artisans/artisan-public.routes.js';
 import { myCommandeRouter } from '../modules/orders/order.routes.js';
 import { adminCommandeRouter } from '../modules/orders/order.admin.routes.js';
-import {
-  adminArticleRouter,
-} from '../modules/articles/article.routes.js';
+import { artisanCommandeRouter } from '../modules/orders/order.artisan.routes.js';
+import { adminArticleRouter } from '../modules/articles/article.routes.js';
 import { adminUserRouter } from '../modules/users/users.routes.js';
 import { adminDashboardRouter } from '../modules/admin/dashboard/dashboard.routes.js';
 import { adminArtisansRouter } from '../modules/admin/artisans/admin-artisans.routes.js';
 import { adminDeliveryRouter } from '../modules/deliveries/delivery.routes.js';
 import { adminReviewRouter } from '../modules/reviews/review.routes.js';
 import { adminDisputeRouter } from '../modules/disputes/dispute.routes.js';
+import { artisanProfilRouter } from '../modules/artisan-profile/artisan-profile.routes.js';
+import { adminAdministrateursRouter } from '../modules/admin/administrateurs/index.js';
+import { favoriRouter } from '../modules/favorites/favorites.routes.js';
 
 const router = Router();
 
@@ -47,8 +47,10 @@ router.use('/v1/categories', publicCategorieRouter);
 router.use('/v1/admin/categories', adminCategorieRouter);
 
 router.use('/v1/artisan/oeuvres', artisanOeuvreRouter);
+router.use('/v1/artisan/commandes', artisanCommandeRouter);
+router.use('/v1/artisan/profil', artisanProfilRouter);
 router.use('/v1/admin/oeuvres', adminOeuvreRouter);
-router.use('/v1/artisans', publicArtisanRouter);
+router.use('/v1/artisans', artisanPublicRouter);
 router.use('/v1/oeuvres', publicOeuvreRouter);
 
 router.use('/v1/commandes', myCommandeRouter);
@@ -67,5 +69,9 @@ router.use('/v1/admin/livraisons', adminDeliveryRouter);
 router.use('/v1/admin/avis', adminReviewRouter);
 
 router.use('/v1/admin/litiges', adminDisputeRouter);
+
+router.use('/v1/admin/administrateurs', adminAdministrateursRouter);
+
+router.use('/v1/favoris', favoriRouter);
 
 export default router;

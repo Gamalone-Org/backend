@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NotFoundError } from '../../src/common/errors/AppError.js';
+import { ConflictError, NotFoundError } from '../../src/common/errors/AppError.js';
 import {
   CSV_EXPORT_LIMIT,
   DeliveryService,
@@ -121,15 +121,53 @@ describe('DeliveryService.updateStatus', () => {
     expect(repository.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('met à jour le statut via le repository dédié', async () => {
+  it('met à jour le statut via le repository dédié quand la transition est autorisée', async () => {
     const { service, repository } = buildService();
-    repository.findByIdSummary.mockResolvedValue({ id: 'del-1', statut: 'EN_ATTENTE' });
+    repository.findByIdSummary.mockResolvedValue({ id: 'del-1', statut: 'PREPAREE' });
     repository.updateStatus.mockResolvedValue({ id: 'del-1', statut: 'EXPEDIEE' });
 
     const result = await service.updateStatus('del-1', 'EXPEDIEE');
 
     expect(repository.updateStatus).toHaveBeenCalledWith('del-1', 'EXPEDIEE');
     expect(result.statut).toBe('EXPEDIEE');
+  });
+
+  it('lève ConflictError pour une transition non autorisée (régression)', async () => {
+    const { service, repository } = buildService();
+    repository.findByIdSummary.mockResolvedValue({ id: 'del-1', statut: 'EXPEDIEE' });
+
+    await expect(service.updateStatus('del-1', 'EN_ATTENTE')).rejects.toBeInstanceOf(ConflictError);
+    expect(repository.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('lève ConflictError depuis un statut terminal (LIVREE)', async () => {
+    const { service, repository } = buildService();
+    repository.findByIdSummary.mockResolvedValue({ id: 'del-1', statut: 'LIVREE' });
+
+    await expect(service.updateStatus('del-1', 'EN_TRANSIT')).rejects.toBeInstanceOf(ConflictError);
+    expect(repository.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('autorise EN_ATTENTE → ECHEC et la relance ECHEC → EN_TRANSIT', async () => {
+    const { service, repository } = buildService();
+    repository.findByIdSummary.mockResolvedValue({ id: 'del-1', statut: 'EN_ATTENTE' });
+    repository.updateStatus.mockResolvedValue({ id: 'del-1', statut: 'ECHEC' });
+
+    const echec = await service.updateStatus('del-1', 'ECHEC');
+    expect(echec.statut).toBe('ECHEC');
+
+    repository.findByIdSummary.mockResolvedValue({ id: 'del-1', statut: 'ECHEC' });
+    repository.updateStatus.mockResolvedValue({ id: 'del-1', statut: 'EN_TRANSIT' });
+
+    const relance = await service.updateStatus('del-1', 'EN_TRANSIT');
+    expect(relance.statut).toBe('EN_TRANSIT');
+  });
+
+  it('refuse un saut d’étape direct EN_ATTENTE → EN_TRANSIT', async () => {
+    const { service, repository } = buildService();
+    repository.findByIdSummary.mockResolvedValue({ id: 'del-1', statut: 'EN_ATTENTE' });
+
+    await expect(service.updateStatus('del-1', 'EN_TRANSIT')).rejects.toBeInstanceOf(ConflictError);
   });
 });
 

@@ -8,7 +8,7 @@ import { OeuvreController } from './oeuvre.controller.js';
 
 export { artisanOeuvreRouter } from './oeuvre.routes.js';
 export { adminOeuvreRouter } from './oeuvre.admin.routes.js';
-export { publicOeuvreRouter, publicArtisanRouter } from './oeuvre.public.routes.js';
+export { publicOeuvreRouter } from './oeuvre.public.routes.js';
 export { OeuvreRepository } from './oeuvre.repository.js';
 export { MediaRepository } from './media.repository.js';
 export { OeuvreService } from './oeuvre.service.js';

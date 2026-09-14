@@ -43,8 +43,8 @@ const controller = new CategorieController(service);
 
 export const publicCategorieRouter = Router();
 
-publicCategorieRouter.get('/', controller.list);
-publicCategorieRouter.get('/:id', controller.getOne);
+publicCategorieRouter.get('/', controller.listPublic);
+publicCategorieRouter.get('/:id', controller.getOnePublic);
 publicCategorieRouter.get('/:categorieId/sous-categories', controller.listSousCategories);
 
 export const adminCategorieRouter = Router();
@@ -52,6 +52,9 @@ export const adminCategorieRouter = Router();
 adminCategorieRouter.use(requireAuth, requireRole('ADMIN'));
 
 adminCategorieRouter.get('/', requireAdminLevel('SUPPORT'), controller.list);
+// Le chemin /export doit être déclaré AVANT /:id pour ne pas être interprété
+// comme un identifiant de catégorie.
+adminCategorieRouter.get('/export', requireAdminLevel('SUPPORT'), controller.exportCsv);
 adminCategorieRouter.get('/:id', requireAdminLevel('SUPPORT'), controller.getOne);
 adminCategorieRouter.post('/', requireAdminLevel('MODERATEUR'), controller.create);
 adminCategorieRouter.patch('/:id', requireAdminLevel('MODERATEUR'), controller.update);

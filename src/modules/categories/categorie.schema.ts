@@ -54,6 +54,10 @@ export const categorieIdParamsSchema = z.object({
   id: z.string().uuid('Identifiant de catégorie invalide'),
 });
 
+export const categorieParamsSchema = z.object({
+  categorieId: z.string().uuid('Identifiant de catégorie invalide'),
+});
+
 export const sousCategorieIdParamsSchema = z.object({
   categorieId: z.string().uuid('Identifiant de catégorie invalide'),
   sousCategorieId: z.string().uuid('Identifiant de sous-catégorie invalide'),

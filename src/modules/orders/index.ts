@@ -5,6 +5,7 @@ import { OrderController } from './order.controller.js';
 
 export { myCommandeRouter } from './order.routes.js';
 export { adminCommandeRouter } from './order.admin.routes.js';
+export { artisanCommandeRouter } from './order.artisan.routes.js';
 export { OrderRepository } from './order.repository.js';
 export { OrderService } from './order.service.js';
 export { OrderController } from './order.controller.js';

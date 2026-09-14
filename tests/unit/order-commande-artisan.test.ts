@@ -35,6 +35,7 @@ function buildService(overrides = {}) {
     findByIdSummary: vi.fn(),
     findForAdmin: vi.fn(),
     updateStatut: vi.fn(),
+    releaseOeuvres: vi.fn(),
     ...overrides,
   } as any;
   return { service: new OrderService(repository), repository };

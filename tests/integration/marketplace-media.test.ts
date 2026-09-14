@@ -51,6 +51,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
   },
   requireRole: () => (_req: any, _res: any, next: any) => next(),
   requireAdminLevel: () => (_req: any, _res: any, next: any) => next(),
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 vi.mock('../../src/modules/kyc/kyc.factory.js', () => ({
@@ -137,7 +138,7 @@ describe('Marketplace media routes', () => {
   });
 
   it('DELETE /medias returns 403 on ForbiddenError', async () => {
-    mockDeleteMedia.mockRejectedValueOnce(new ForbiddenError('non autorisé'));
+    mockDeleteMedia.mockRejectedValueOnce(new ForbiddenError('non autorisÃ©'));
     const response = await request(app).delete(
       `/api/v1/admin/oeuvres/${OEUVRE_ID}/medias/${MEDIA_ID}`
     );

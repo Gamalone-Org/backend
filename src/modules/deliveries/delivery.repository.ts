@@ -1,4 +1,8 @@
 import type { Prisma, PrismaClient, DeliveryStatus } from '../../generated/prisma/client.js';
+import {
+  COMMANDE_STATUS_RANK,
+  statutsNonRegressablesCible,
+} from '../orders/order.repository.js';
 import { deliveryDetailSelect, deliveryListItemSelect } from './delivery.types.js';
 import type { DeliveryDetail, DeliveryListItem } from './delivery.types.js';
 
@@ -92,10 +96,53 @@ export class DeliveryRepository {
   }
 
   async updateStatus(id: string, statut: DeliveryStatus) {
-    return this.prisma.livraison.update({
-      where: { id },
-      data: { statut },
+    return this.prisma.$transaction(async (tx) => {
+      const livraison = await tx.livraison.update({
+        where: { id },
+        data: { statut },
+        select: { id: true, statut: true, commandeId: true },
+      });
+
+      // Synchronisation Livraison → Commande (R2) : quand la livraison atteint
+      // LIVREE, la commande globale passe à LIVREE (et ses CommandeArtisan non
+      // terminales aussi). Une commande déjà CLOTUREE, ANNULEE ou REMBOURSEE
+      // n'est JAMAIS régressée.
+      if (statut === 'LIVREE') {
+        await this.syncOrderToLivree(tx, livraison.commandeId);
+      }
+
+      return { id: livraison.id, statut: livraison.statut };
+    });
+  }
+
+  /**
+   * Marque la commande globale comme livrée lorsque la livraison physique est
+   * terminée (R2). Protection anti-régression : seule une commande encore « en
+   * cours » (statut strictement avant LIVREE) est touchée ; une commande
+   * CLOTUREE / ANNULEE / REMBOURSEE reste inchangée.
+   */
+  private async syncOrderToLivree(tx: Prisma.TransactionClient, commandeId: string) {
+    const commande = await tx.commande.findUnique({
+      where: { id: commandeId },
       select: { id: true, statut: true },
+    });
+    if (!commande) return;
+
+    if (COMMANDE_STATUS_RANK[commande.statut] >= COMMANDE_STATUS_RANK['LIVREE']) {
+      return;
+    }
+
+    await tx.commande.update({
+      where: { id: commandeId },
+      data: { statut: 'LIVREE' },
+    });
+
+    await tx.commandeArtisan.updateMany({
+      where: {
+        commandeId,
+        statut: { notIn: statutsNonRegressablesCible('LIVREE') },
+      },
+      data: { statut: 'LIVREE' },
     });
   }
 

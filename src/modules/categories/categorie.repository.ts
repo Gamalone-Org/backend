@@ -46,11 +46,14 @@ type SousCategorieUpdateData = {
   imageCouverturePublicId?: string | null;
 };
 
-export type ListCategoriesOptions = {
-  page: number;
-  limit: number;
+export type CategorieFilters = {
   statut?: CategoryStatus;
   q?: string;
+};
+
+export type ListCategoriesOptions = CategorieFilters & {
+  page: number;
+  limit: number;
 };
 
 export class CategorieRepository {
@@ -83,6 +86,7 @@ export class CategorieRepository {
   findCategorieById(id: string) {
     return this.prisma.categorie.findUnique({
       where: { id },
+      include: { _count: { select: { oeuvres: true } } },
     });
   }
 
@@ -103,10 +107,7 @@ export class CategorieRepository {
   }
 
   async listCategories(options: ListCategoriesOptions) {
-    const where: Prisma.CategorieWhereInput = {
-      ...(options.statut ? { statut: options.statut } : {}),
-      ...(options.q ? { nom: { contains: options.q, mode: 'insensitive' } } : {}),
-    };
+    const where = this.buildWhere(options);
 
     const [total, items] = await this.prisma.$transaction([
       this.prisma.categorie.count({ where }),
@@ -115,11 +116,30 @@ export class CategorieRepository {
         orderBy: [{ position: 'asc' }, { nom: 'asc' }],
         skip: (options.page - 1) * options.limit,
         take: options.limit,
-        include: { sousCategories: { orderBy: [{ position: 'asc' }, { nom: 'asc' }] } },
+        include: {
+          sousCategories: { orderBy: [{ position: 'asc' }, { nom: 'asc' }] },
+          _count: { select: { oeuvres: true } },
+        },
       }),
     ]);
 
     return { items, total, page: options.page, limit: options.limit };
+  }
+
+  async findForExport(options: CategorieFilters, limit: number) {
+    return this.prisma.categorie.findMany({
+      where: this.buildWhere(options),
+      orderBy: [{ position: 'asc' }, { nom: 'asc' }],
+      take: limit,
+      include: { _count: { select: { oeuvres: true } } },
+    });
+  }
+
+  private buildWhere(options: CategorieFilters): Prisma.CategorieWhereInput {
+    return {
+      ...(options.statut ? { statut: options.statut } : {}),
+      ...(options.q ? { nom: { contains: options.q, mode: 'insensitive' } } : {}),
+    };
   }
 
   createSousCategorie(data: SousCategorieData) {
@@ -148,9 +168,9 @@ export class CategorieRepository {
     });
   }
 
-  listSousCategoriesByCategorie(categorieId: string) {
+  listSousCategoriesByCategorie(categorieId: string, statut?: CategoryStatus) {
     return this.prisma.sousCategorie.findMany({
-      where: { categorieId },
+      where: { categorieId, ...(statut ? { statut } : {}) },
       orderBy: [{ position: 'asc' }, { nom: 'asc' }],
     });
   }

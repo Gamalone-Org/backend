@@ -20,6 +20,7 @@ const tags = [
   { name: 'Articles', description: 'Articles éditoriaux (back-office Admin)' },
   { name: 'Notifications', description: 'Notifications and messaging' },
   { name: 'Support', description: 'Support and aid flows' },
+  { name: 'Favoris', description: 'Mes favoris acheteur (Espace Acheteur)' },
   { name: 'Health', description: 'System health endpoints' },
 ];
 
@@ -27,6 +28,7 @@ export const swaggerOptions = {
   customSiteTitle: 'GAMALONE API Docs',
   customfavIcon: '',
   explorer: false,
+  
   customCss: `
     body { background: #0f172a; color: #e2e8f0; }
     .swagger-ui .topbar { background: #111827; }
@@ -925,18 +927,99 @@ export const swaggerDocument = {
         },
       },
     },
-    '/api/v1/artisans/{artisanId}/oeuvres': {
+    '/api/v1/artisans': {
       get: {
-        tags: ['Artworks'],
-        summary: 'List published artworks of an artisan (public)',
-        description: 'Public paginated list of an artisan PUBLIEES artworks.',
+        tags: ['Artisans'],
+        summary: 'List public artisans',
+        description:
+          'Public paginated list of visible artisans with search and filters. Only active artisans with validated profiles are shown.',
+        security: [],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 50 },
+          },
+          {
+            name: 'q',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+            description: 'Search in nom, atelier, specialite, localisation',
+          },
+          {
+            name: 'pays',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+          },
+          {
+            name: 'ville',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+          },
+          {
+            name: 'specialite',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+          },
+          {
+            name: 'tri',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: ['recent', 'oldest', 'name_asc', 'name_desc'],
+              default: 'recent',
+            },
+          },
+        ],
+        responses: {
+          '200': { description: 'List of public artisans' },
+          '400': { description: 'Invalid query parameters' },
+        },
+      },
+    },
+    '/api/v1/artisans/{identifier}': {
+      get: {
+        tags: ['Artisans'],
+        summary: 'Get public artisan profile',
+        description:
+          'Returns the complete public profile of an artisan including atelier photos, creation process, expositions, and public statistics.',
         security: [],
         parameters: [
           {
-            name: 'artisanId',
+            name: 'identifier',
             in: 'path',
             required: true,
             schema: { type: 'string', format: 'uuid' },
+            description: 'ArtisanProfile ID',
+          },
+        ],
+        responses: {
+          '200': { description: 'Artisan public profile' },
+          '400': { description: 'Invalid identifier' },
+          '404': { description: 'Artisan not found or not publicly visible' },
+        },
+      },
+    },
+    '/api/v1/artisans/{identifier}/oeuvres': {
+      get: {
+        tags: ['Artisans'],
+        summary: 'List published artworks of an artisan (public)',
+        description: 'Public paginated list of an artisan published artworks.',
+        security: [],
+        parameters: [
+          {
+            name: 'identifier',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'ArtisanProfile ID',
           },
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
           {
@@ -998,6 +1081,163 @@ export const swaggerDocument = {
           '200': { description: 'Artwork details' },
           '403': { description: 'Forbidden: artwork belongs to another artisan' },
           '404': { description: 'Artwork not found' },
+        },
+      },
+    },
+    '/api/v1/artisan/commandes': {
+      get: {
+        tags: ['Commandes'],
+        summary: 'List my orders (artisan)',
+        description:
+          'Paginated list of the authenticated artisan own CommandeArtisan (one per order line the artisan must fulfil), with the count of rows per status. The artisan only sees its own order entries; buyer phone/email are never exposed.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 50 },
+          },
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              enum: ['COMMANDE', 'PREPARATION', 'EXPEDIEE', 'LIVREE', 'CLOTUREE', 'ANNULEE', 'REMBOURSEE'],
+            },
+          },
+          {
+            name: 'q',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', description: 'Search by buyer name, artwork title or exact order id' },
+          },
+        ],
+        responses: {
+          '200': { description: 'List of my orders with a per-status count' },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+        },
+      },
+    },
+    '/api/v1/artisan/commandes/{id}': {
+      get: {
+        tags: ['Commandes'],
+        summary: 'Get my order (artisan)',
+        description:
+          'Returns detail of one CommandeArtisan owned by the authenticated artisan (lines, artworks, destination address, buyer name). A 404 is returned when the order does not exist or belongs to another artisan.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Order detail' },
+          '400': { description: 'Invalid id parameter' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'Order not found or belongs to another artisan' },
+        },
+      },
+    },
+    '/api/v1/artisan/commandes/{id}/preparer': {
+      post: {
+        tags: ['Commandes'],
+        summary: 'Mark my order as being prepared (artisan)',
+        description:
+          'Advances the authenticated artisan CommandeArtisan from COMMANDE to PREPARATION. The parent order global status is recalculated as the minimum status of all active CommandeArtisan.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Order advanced to PREPARATION, with the recalculated global status' },
+          '400': { description: 'Invalid id parameter' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'Order not found or belongs to another artisan' },
+          '409': { description: 'Conflict: invalid transition or concurrent modification' },
+        },
+      },
+    },
+    '/api/v1/artisan/commandes/{id}/expedier': {
+      post: {
+        tags: ['Commandes'],
+        summary: 'Mark my order as shipped (artisan)',
+        description:
+          'Advances the authenticated artisan CommandeArtisan from PREPARATION to EXPEDIEE. The parent order global status is recalculated as the minimum status of all active CommandeArtisan.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Order advanced to EXPEDIEE, with the recalculated global status' },
+          '400': { description: 'Invalid id parameter' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'Order not found or belongs to another artisan' },
+          '409': { description: 'Conflict: invalid transition or concurrent modification' },
+        },
+      },
+    },
+    '/api/v1/favoris': {
+      get: {
+        tags: ['Favoris'],
+        summary: 'List my favorites (buyer)',
+        description:
+          'Paginated list of the favorites of the authenticated buyer. Only the BuyerProfile of the connected user is queried (ownership scoped server-side). Each favorite exposes the artwork with its current status, the artisan card (id, nomAtelier, user.nom) and the cover media (first OEUVRE media). Favorites are kept even if the artwork later becomes VENDUE/RETIREE.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 50 },
+          },
+        ],
+        responses: {
+          '200': { description: 'List of favorites (favoris, total, page, limit)' },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not a buyer' },
+        },
+      },
+    },
+    '/api/v1/favoris/{oeuvreId}': {
+      post: {
+        tags: ['Favoris'],
+        summary: 'Add an artwork to my favorites (buyer)',
+        description:
+          'Adds the artwork to the favorites of the authenticated buyer. The artwork must exist and be PUBLIEE (accessible in the catalog), otherwise 404. The call is idempotent: adding an already-favorited artwork returns the existing favorite (201, no duplicate). The buyer is always resolved server-side from the JWT, never from a client-provided id.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'oeuvreId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '201': { description: 'Favorite created (or already present, idempotent)' },
+          '400': { description: 'Invalid oeuvreId parameter' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not a buyer' },
+          '404': { description: 'Artwork not found or not accessible in the catalog' },
+        },
+      },
+      delete: {
+        tags: ['Favoris'],
+        summary: 'Remove an artwork from my favorites (buyer)',
+        description:
+          'Removes the favorite (buyer, artwork). The deletion is always scoped with buyerId + oeuvreId, so it can never remove the favorite of another buyer. Idempotent: removing an absent favorite returns 204 with no error.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'oeuvreId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '204': { description: 'Favorite removed (idempotent, no content)' },
+          '400': { description: 'Invalid oeuvreId parameter' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not a buyer' },
         },
       },
     },
@@ -1912,7 +2152,7 @@ export const swaggerDocument = {
         tags: ['Categories'],
         summary: 'List categories (public)',
         description:
-          'Paginated public list of ACTIVE categories with their sous-categories. Filters: page, limit, statut, q.',
+          'Paginated public list restricted to ACTIVE categories with their ACTIVE sous-categories. INACTIVE categories are never exposed publicly. Filters: page, limit, q (statut is forced to ACTIVE and ignored if provided).',
         security: [],
         parameters: [
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
@@ -1922,16 +2162,27 @@ export const swaggerDocument = {
             required: false,
             schema: { type: 'integer', default: 20, maximum: 100 },
           },
-          {
-            name: 'statut',
-            in: 'query',
-            required: false,
-            schema: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
-          },
           { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
         ],
         responses: {
-          '200': { description: 'Paginated list of categories' },
+          '200': {
+            description: 'Paginated list of ACTIVE categories',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    items: { type: 'array', items: { type: 'object' } },
+                    total: { type: 'integer' },
+                    page: { type: 'integer' },
+                    limit: { type: 'integer' },
+                    totalPages: { type: 'integer' },
+                  },
+                },
+              },
+            },
+          },
           '400': { description: 'Invalid query parameters' },
         },
       },
@@ -1968,10 +2219,43 @@ export const swaggerDocument = {
         },
       },
     },
+    '/api/v1/categories/export': {
+      get: {
+        tags: ['Categories'],
+        summary: 'Export categories as CSV (admin)',
+        description:
+          'Exports categories as a CSV file applying the same filters as the list (q, statut). No pagination and capped at 5000 rows. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'CSV export (id, nom, description, slug, statut, position, nombre_oeuvres, imageCouvertureUrl, createdAt)',
+            content: {
+              'text/csv': {
+                schema: { type: 'string' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+        },
+      },
+    },
     '/api/v1/categories/{id}': {
       get: {
         tags: ['Categories'],
         summary: 'Get a category (public)',
+        description:
+          'Returns an ACTIVE category only. INACTIVE categories are not exposed publicly and return 404.',
         security: [],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
@@ -1979,7 +2263,7 @@ export const swaggerDocument = {
         responses: {
           '200': { description: 'Category details' },
           '400': { description: 'Invalid category id' },
-          '404': { description: 'Category not found' },
+          '404': { description: 'Category not found or not ACTIVE' },
         },
       },
       patch: {
@@ -2086,6 +2370,8 @@ export const swaggerDocument = {
       get: {
         tags: ['Categories'],
         summary: 'List sous-categories of a category (public)',
+        description:
+          'Lists only the ACTIVE sous-categories of an ACTIVE category. An INACTIVE or unknown category returns 404.',
         security: [],
         parameters: [
           {
@@ -2096,9 +2382,9 @@ export const swaggerDocument = {
           },
         ],
         responses: {
-          '200': { description: 'List of sous-categories' },
+          '200': { description: 'List of ACTIVE sous-categories' },
           '400': { description: 'Invalid category id' },
-          '404': { description: 'Category not found' },
+          '404': { description: 'Category not found or not ACTIVE' },
         },
       },
       post: {
@@ -2147,7 +2433,8 @@ export const swaggerDocument = {
       patch: {
         tags: ['Categories'],
         summary: 'Update a sous-category (admin)',
-        description: 'Updates nom, description, statut or position of a sous-category. Requires MODERATEUR admin level minimum.',
+        description:
+          'Updates nom, description, statut or position of a sous-category. The sous-category must belong to the categorieId in the path, otherwise 404. Requires MODERATEUR admin level minimum.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -2185,14 +2472,15 @@ export const swaggerDocument = {
           '400': { description: 'Invalid payload' },
           '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: insufficient admin level' },
-          '404': { description: 'Sous-category not found' },
+          '404': { description: 'Sous-category not found or does not belong to this category' },
           '409': { description: 'Duplicate name within the category' },
         },
       },
       delete: {
         tags: ['Categories'],
         summary: 'Delete a sous-category (admin)',
-        description: 'Deletes a sous-category. Requires MODERATEUR admin level minimum.',
+        description:
+          'Deletes a sous-category. The sous-category must belong to the categorieId in the path, otherwise 404. Requires MODERATEUR admin level minimum.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -2212,7 +2500,7 @@ export const swaggerDocument = {
           '204': { description: 'Sous-category deleted' },
           '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: insufficient admin level' },
-          '404': { description: 'Sous-category not found' },
+          '404': { description: 'Sous-category not found or does not belong to this category' },
           '409': { description: 'Sous-category still referenced' },
         },
       },
@@ -2776,6 +3064,192 @@ export const swaggerDocument = {
         },
       },
     },
+  '/api/v1/admin/administrateurs': {
+      get: {
+        tags: ['Admin Administrateurs'],
+        summary: 'Liste des comptes administrateurs (ADMINS_READ)',
+        description:
+          'Liste paginée des comptes ADMIN (SUPPORT/MODERATEUR/SUPER_ADMIN) avec leur profil AdminProfile et leurs permissions. Réservé aux administrateurs possédant la permission ADMINS_READ (en pratique : SUPER_ADMIN).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' }, description: 'Recherche sur nom, e-mail ou téléphone.' },
+          { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'] } },
+          { name: 'niveauAcces', in: 'query', required: false, schema: { type: 'string', enum: ['SUPPORT', 'MODERATEUR', 'SUPER_ADMIN'] } },
+        ],
+        responses: {
+          '200': {
+            description: 'Liste paginée des administrateurs',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminAdministrateurListResponse' },
+              },
+            },
+          },
+          '400': { description: 'Paramètre invalide (limit > 100…)' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: permission ADMINS_READ requise' },
+        },
+      },
+      post: {
+        tags: ['Admin Administrateurs'],
+        summary: 'Créer un compte ADMIN (ADMINS_CREATE)',
+        description:
+          'Crée un compte ADMIN (SUPPORT ou MODERATEUR) avec mot de passe haché (scrypt), téléphone vérifié et permissions attribuées. Le niveau SUPER_ADMIN est impossible via cette API (bootstrap dédié). Les permissions ADMINS_* sont réservées au SUPER_ADMIN direct et refusées ici. Ne crée jamais de compte SUPER_ADMIN.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AdminAdministrateurCreateRequest' },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Administrateur créé',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminAdministrateurDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: permission ADMINS_CREATE requise' },
+          '409': { description: 'Conflit e-mail/téléphone' },
+        },
+      },
+    },
+    '/api/v1/admin/administrateurs/{id}': {
+      get: {
+        tags: ['Admin Administrateurs'],
+        summary: 'Détail d’un compte administrateur (ADMINS_READ)',
+        description:
+          "Retourne l'utilisateur ADMIN avec son AdminProfile (niveauAcces, departement) et la liste de ses permissions. id = identifiant du profil AdminProfile.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Détail de l’administrateur',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminAdministrateurDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Identifiant invalide (UUID requis)' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: permission ADMINS_READ requise' },
+          '404': { description: 'Administrateur non trouvé' },
+        },
+      },
+      patch: {
+        tags: ['Admin Administrateurs'],
+        summary: 'Modifier un compte administrateur (ADMINS_UPDATE)',
+        description:
+          'Modifie les informations du compte ADMIN (nom, e-mail, departement). Ne modifie ni les permissions, ni le statut, ni le niveau d’accès. Un SUPER_ADMIN ne peut pas modifier son propre compte.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AdminAdministrateurUpdateRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Administrateur mis à jour',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminAdministrateurDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: permission ADMINS_UPDATE requise ou auto-modification' },
+          '404': { description: 'Administrateur non trouvé' },
+          '409': { description: 'Conflit e-mail' },
+        },
+      },
+    },
+    '/api/v1/admin/administrateurs/{id}/permissions': {
+      patch: {
+        tags: ['Admin Administrateurs'],
+        summary: 'Attribuer les permissions d’un ADMIN (ADMINS_MANAGE)',
+        description:
+          'Remplace la liste complète des permissions de l’ADMIN cible. La liste est vérifiée (unicité, permission reconnue) et les permissions ADMINS_* sont refusées (réservées au SUPER_ADMIN direct). Sans effet sur un SUPER_ADMIN (il possède toutes les permissions par nature).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AdminAdministrateurPermissionsRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Permissions mises à jour',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminAdministrateurDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: permission ADMINS_MANAGE requise ou auto-modification' },
+          '404': { description: 'Administrateur non trouvé' },
+        },
+      },
+    },
+    '/api/v1/admin/administrateurs/{id}/statut': {
+      patch: {
+        tags: ['Admin Administrateurs'],
+        summary: 'Changer le statut d’un compte administrateur (ADMINS_UPDATE)',
+        description:
+          'Active/désactive/suspend le compte ADMIN cible (son User.statut). Impossible de désactiver le dernier SUPER_ADMIN actif et impossible de modifier son propre compte.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AdminAdministrateurStatusRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Statut mis à jour',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminAdministrateurDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Validation error' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: permission ADMINS_UPDATE requise ou auto-modification' },
+          '404': { description: 'Administrateur non trouvé' },
+          '409': { description: 'Conflit : dernier SUPER_ADMIN actif' },
+        },
+      },
+    },
   '/api/v1/admin/dashboard': {
       get: {
         tags: ['Admin Dashboard'],
@@ -2916,6 +3390,507 @@ export const swaggerDocument = {
           '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: SUPPORT minimum requis' },
           '404': { description: 'Artisan non trouvé' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil': {
+      get: {
+        tags: ['Artisans'],
+        summary: 'Get my artisan profile',
+        description:
+          'Returns the complete profile of the authenticated artisan (identité, présentation, photos, processus, expositions, coordonnées, réseau sociaux, boutiques et préférences de versement). Données privées uniquement visibles par le propriétaire.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'Full artisan profile' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+        },
+      },
+      patch: {
+        tags: ['Artisans'],
+        summary: 'Update my artisan profile',
+        description:
+          'Updates the allowed fields of the artisan profile: nomAtelier, specialite, anneeCreation, ville, pays, bioCourte, histoire, siteWeb, reseaux sociaux (instagram, facebook, whatsapp), devise (XOF/EUR/USD), langue (fr/en), preparationMinDays/preparationMaxDays. Strict Zod validation, no mass assignment.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  nomAtelier: { type: 'string', maxLength: 255 },
+                  specialite: { type: 'string', maxLength: 255 },
+                  anneeCreation: { type: 'integer', minimum: 1900 },
+                  ville: { type: 'string', maxLength: 255 },
+                  pays: { type: 'string', maxLength: 255 },
+                  bioCourte: { type: 'string', maxLength: 500 },
+                  histoire: { type: 'string', maxLength: 10000 },
+                  siteWeb: { type: 'string', format: 'uri' },
+                  instagram: { type: 'string' },
+                  facebook: { type: 'string' },
+                  whatsapp: { type: 'string' },
+                  devise: { type: 'string', enum: ['XOF', 'EUR', 'USD'] },
+                  langue: { type: 'string', enum: ['fr', 'en'] },
+                  preparationMinDays: { type: 'integer', minimum: 0 },
+                  preparationMaxDays: { type: 'integer', minimum: 0 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Updated artisan profile' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/photo': {
+      post: {
+        tags: ['Artisans'],
+        summary: 'Upload / replace my photo de profil',
+        description:
+          'Uploads (or replaces) the artisan profile photo. The previous Cloudinary asset is deleted. Accepts JPEG/PNG/WEBP, max 10MB, field name "file".',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Photo de profil uploaded' },
+          '400': { description: 'Missing file or unsupported image type' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+        },
+      },
+      delete: {
+        tags: ['Artisans'],
+        summary: 'Delete my photo de profil',
+        description: 'Removes the artisan profile photo from Cloudinary and clears the DB fields.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '204': { description: 'Photo de profil deleted' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'No photo de profil set' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/banniere': {
+      post: {
+        tags: ['Artisans'],
+        summary: 'Upload / replace my atelier banner',
+        description:
+          'Uploads (or replaces) the atelier banner (format recommandé 1600x400). The previous Cloudinary asset is deleted. Accepts JPEG/PNG/WEBP, max 10MB, field name "file".',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Bannière uploaded' },
+          '400': { description: 'Missing file or unsupported image type' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+        },
+      },
+      delete: {
+        tags: ['Artisans'],
+        summary: 'Delete my atelier banner',
+        description: 'Removes the atelier banner from Cloudinary and clears the DB fields.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '204': { description: 'Bannière deleted' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'No banner set' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/atelier/photos': {
+      get: {
+        tags: ['Artisans'],
+        summary: 'List my atelier photos',
+        description:
+          'Lists the atelier photos of the authenticated artisan, ordered by ordre.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'Atelier photos list' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+        },
+      },
+      post: {
+        tags: ['Artisans'],
+        summary: 'Add an atelier photo',
+        description:
+          'Adds a new atelier photo (maximum 3). Each photo is uploaded to Cloudinary and stored with an order. Accepts JPEG/PNG/WEBP, max 10MB, field name "file".',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Atelier photo created' },
+          '400': { description: 'Missing file or unsupported image type' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '409': { description: 'Maximum 3 photos pour l\'atelier' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/atelier/photos/{photoId}': {
+      delete: {
+        tags: ['Artisans'],
+        summary: 'Delete an atelier photo',
+        description:
+          'Deletes an atelier photo owned by the authenticated artisan. 404 if the photo does not exist or belongs to another artisan.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'photoId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '204': { description: 'Atelier photo deleted' },
+          '400': { description: 'Invalid photo id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'Photo not found or belongs to another artisan' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/atelier/photos/reorder': {
+      patch: {
+        tags: ['Artisans'],
+        summary: 'Reorder my atelier photos',
+        description:
+          'Reorders all atelier photos of the authenticated artisan. The list must contain all the photo ids, without duplicates, all owned by the artisan.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  photoIds: { type: 'array', items: { type: 'string', format: 'uuid' } },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Photos reordered' },
+          '400': { description: 'Invalid list or duplicates' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'A photo does not belong to the artisan' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/processus': {
+      get: {
+        tags: ['Artisans'],
+        summary: 'List my création process steps',
+        description: 'Lists the création process steps of the authenticated artisan, ordered by ordre.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'Processus steps list' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+        },
+      },
+      post: {
+        tags: ['Artisans'],
+        summary: 'Add a création process step',
+        description:
+          'Adds a new step (maximum 4). Each step has an ordre (unique, 1-4) and a legende. The photo can be uploaded afterwards via POST /processus/{etapeId}/photo.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  ordre: { type: 'integer', minimum: 1, maximum: 4 },
+                  legende: { type: 'string', maxLength: 500 },
+                },
+                required: ['ordre', 'legende'],
+              },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Processus step created' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '409': { description: 'Maximum 4 étapes or ordre already used' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/processus/{etapeId}': {
+      patch: {
+        tags: ['Artisans'],
+        summary: 'Update a création process step',
+        description:
+          'Updates the legende of a step owned by the authenticated artisan. 404 if the step does not exist or belongs to another artisan.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'etapeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  legende: { type: 'string', maxLength: 500 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Step updated' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'Step not found or belongs to another artisan' },
+        },
+      },
+      delete: {
+        tags: ['Artisans'],
+        summary: 'Delete a création process step',
+        description:
+          'Deletes a step owned by the authenticated artisan. Its Cloudinary photo is also removed. 404 if the step does not exist or belongs to another artisan.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'etapeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '204': { description: 'Step deleted' },
+          '400': { description: 'Invalid step id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'Step not found or belongs to another artisan' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/processus/{etapeId}/photo': {
+      post: {
+        tags: ['Artisans'],
+        summary: 'Upload / replace a step photo',
+        description:
+          'Uploads (or replaces) the photo of a step owned by the authenticated artisan. The previous Cloudinary asset is deleted. Accepts JPEG/PNG/WEBP, max 10MB, field name "file".',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'etapeId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  file: { type: 'string', format: 'binary' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Step photo uploaded' },
+          '400': { description: 'Missing file or unsupported image type' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'Step not found or belongs to another artisan' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/processus/reorder': {
+      patch: {
+        tags: ['Artisans'],
+        summary: 'Reorder my création process steps',
+        description:
+          'Reorders all steps of the authenticated artisan. The list must contain all step ids, without duplicates, all owned by the artisan.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  etapeIds: { type: 'array', items: { type: 'string', format: 'uuid' } },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Steps reordered' },
+          '400': { description: 'Invalid list or duplicates' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'A step does not belong to the artisan' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/expositions': {
+      get: {
+        tags: ['Artisans'],
+        summary: 'List my exhibitions',
+        description: 'Lists the exhibitions of the authenticated artisan, ordered by année DESC then createdAt DESC.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'Exhibitions list' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+        },
+      },
+      post: {
+        tags: ['Artisans'],
+        summary: 'Add an exhibition',
+        description: 'Creates an exhibition (année, événement, lieu) for the authenticated artisan.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  annee: { type: 'integer', minimum: 1900 },
+                  evenement: { type: 'string', maxLength: 255 },
+                  lieu: { type: 'string', maxLength: 255 },
+                },
+                required: ['annee', 'evenement', 'lieu'],
+              },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Exhibition created' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/expositions/{expositionId}': {
+      patch: {
+        tags: ['Artisans'],
+        summary: 'Update an exhibition',
+        description:
+          'Updates an exhibition owned by the authenticated artisan. 404 if the exhibition does not exist or belongs to another artisan.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'expositionId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  annee: { type: 'integer', minimum: 1900 },
+                  evenement: { type: 'string', maxLength: 255 },
+                  lieu: { type: 'string', maxLength: 255 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Exhibition updated' },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'Exhibition not found or belongs to another artisan' },
+        },
+      },
+      delete: {
+        tags: ['Artisans'],
+        summary: 'Delete an exhibition',
+        description:
+          'Deletes an exhibition owned by the authenticated artisan. 404 if the exhibition does not exist or belongs to another artisan.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'expositionId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '204': { description: 'Exhibition deleted' },
+          '400': { description: 'Invalid exhibition id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+          '404': { description: 'Exhibition not found or belongs to another artisan' },
+        },
+      },
+    },
+    '/api/v1/artisan/profil/versement': {
+      patch: {
+        tags: ['Artisans'],
+        summary: 'Set my payout preferences (private)',
+        description:
+          'Configures the payout method of the authenticated artisan: MOBILE_MONEY (opérateur + numéro) or VIREMENT_BANCAIRE (nom de banque, IBAN, nom du compte). Données strictement privées, jamais exposées aux endpoints publics.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  methode: { type: 'string', enum: ['MOBILE_MONEY', 'VIREMENT_BANCAIRE'] },
+                  mobileMoneyOperateur: { type: 'string', maxLength: 100 },
+                  mobileMoneyNumero: { type: 'string', maxLength: 30 },
+                  virementNomBanque: { type: 'string', maxLength: 255 },
+                  virementIban: { type: 'string', maxLength: 50 },
+                  virementNomCompte: { type: 'string', maxLength: 255 },
+                },
+                required: ['methode'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'Payout preference saved' },
+          '400': { description: 'Invalid payload or missing required fields for the method' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
         },
       },
     },
@@ -3083,6 +4058,128 @@ export const swaggerDocument = {
           niveauAcces: { type: 'string', enum: ['SUPPORT', 'MODERATEUR', 'SUPER_ADMIN'] },
         },
         required: ['role'],
+      },
+      AdminAdministrateurItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          email: { type: 'string', format: 'email', nullable: true },
+          nom: { type: 'string', nullable: true },
+          telephone: { type: 'string' },
+          statut: { type: 'string', enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'] },
+          role: { type: 'string', enum: ['ADMIN'] },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          telephoneVerificationStatus: { type: 'string', enum: ['NON_VERIFIE', 'EN_ATTENTE_VERIFICATION', 'VERIFIE', 'BLOQUE'] },
+          adminProfile: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              niveauAcces: { type: 'string', enum: ['SUPPORT', 'MODERATEUR', 'SUPER_ADMIN'] },
+              departement: { type: 'string' },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' },
+              permissions: {
+                type: 'array',
+                items: { $ref: '#/components/schemas/AdminPermission' },
+              },
+            },
+          },
+        },
+      },
+      AdminPermission: {
+        type: 'string',
+        enum: [
+          'ADMINS_READ',
+          'ADMINS_CREATE',
+          'ADMINS_UPDATE',
+          'ADMINS_MANAGE',
+          'USERS_READ',
+          'USERS_UPDATE',
+          'ARTISANS_READ',
+          'ARTISANS_UPDATE',
+          'KYC_READ',
+          'KYC_REVIEW',
+          'KYC_VALIDATE',
+          'ARTWORKS_READ',
+          'ARTWORKS_CREATE',
+          'ARTWORKS_UPDATE',
+          'ARTWORKS_DELETE',
+          'ARTWORKS_PUBLISH',
+          'CATEGORIES_READ',
+          'CATEGORIES_MANAGE',
+          'ORDERS_READ',
+          'ORDERS_UPDATE',
+          'DISPUTES_READ',
+          'DISPUTES_MANAGE',
+          'ARTICLES_READ',
+          'ARTICLES_CREATE',
+          'ARTICLES_UPDATE',
+          'ARTICLES_DELETE',
+          'ARTICLES_PUBLISH',
+          'DELIVERIES_READ',
+          'DELIVERIES_UPDATE',
+          'REVIEWS_READ',
+          'DASHBOARD_READ',
+        ],
+      },
+      AdminAdministrateurListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          items: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/AdminAdministrateurItem' },
+          },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
+        },
+        required: ['success', 'items', 'total', 'page', 'limit', 'totalPages'],
+      },
+      AdminAdministrateurDetailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          admin: { $ref: '#/components/schemas/AdminAdministrateurItem' },
+        },
+        required: ['success', 'admin'],
+      },
+      AdminAdministrateurCreateRequest: {
+        type: 'object',
+        properties: {
+          nom: { type: 'string', maxLength: 255 },
+          email: { type: 'string', format: 'email' },
+          telephone: { type: 'string', example: '+22890123456' },
+          motDePasse: { type: 'string', format: 'password', minLength: 8, maxLength: 128 },
+          niveauAcces: { type: 'string', enum: ['SUPPORT', 'MODERATEUR'], default: 'MODERATEUR' },
+          departement: { type: 'string', maxLength: 255 },
+          permissions: { type: 'array', items: { $ref: '#/components/schemas/AdminPermission' } },
+        },
+        required: ['nom', 'telephone', 'motDePasse'],
+      },
+      AdminAdministrateurUpdateRequest: {
+        type: 'object',
+        properties: {
+          nom: { type: 'string', maxLength: 255 },
+          email: { type: 'string', format: 'email', nullable: true },
+          departement: { type: 'string', maxLength: 255 },
+        },
+      },
+      AdminAdministrateurPermissionsRequest: {
+        type: 'object',
+        properties: {
+          permissions: { type: 'array', items: { $ref: '#/components/schemas/AdminPermission' } },
+        },
+        required: ['permissions'],
+      },
+      AdminAdministrateurStatusRequest: {
+        type: 'object',
+        properties: {
+          statut: { type: 'string', enum: ['ACTIF', 'INACTIF', 'SUSPENDU'] },
+        },
+        required: ['statut'],
       },
       AuthOtpSendRequest: {
         type: 'object',

@@ -27,7 +27,8 @@
     "prisma:validate": "prisma validate",
     "prisma:format": "prisma format",
     "sms:test": "tsx tools/test-sms.ts",
-    "cloudinary:test": "tsx tools/test-cloudinary.ts"
+    "cloudinary:test": "tsx tools/test-cloudinary.ts",
+    "bootstrap:super-admin": "tsx tools/bootstrap-super-admin.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

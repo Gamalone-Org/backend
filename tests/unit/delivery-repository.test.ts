@@ -226,18 +226,97 @@ describe('DeliveryRepository.updateDelivery', () => {
 });
 
 describe('DeliveryRepository.updateStatus', () => {
-  it('met à jour uniquement le statut sur prisma.livraison', async () => {
-    const { repository, prisma } = buildRepository();
-    prisma.livraison.update.mockResolvedValue({ id: 'del-1', statut: 'EXPEDIEE' });
+  function buildUpdateRepository() {
+    const tx = {
+      livraison: { update: vi.fn() },
+      commande: { findUnique: vi.fn(), update: vi.fn() },
+      commandeArtisan: { updateMany: vi.fn() },
+    } as any;
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: any) => Promise<unknown>) =>
+        callback(tx)
+      ),
+    };
+    const repository = new DeliveryRepository(prisma as any);
+    return { repository, tx };
+  }
+
+  it('met à jour uniquement le statut de livraison hors LIVREE (pas de sync Commande)', async () => {
+    const { repository, tx } = buildUpdateRepository();
+    tx.livraison.update.mockResolvedValue({
+      id: 'del-1',
+      statut: 'EXPEDIEE',
+      commandeId: CMD_ID,
+    });
 
     const result = await repository.updateStatus('del-1', 'EXPEDIEE');
 
-    expect(prisma.livraison.update).toHaveBeenCalledWith({
+    expect(tx.livraison.update).toHaveBeenCalledWith({
       where: { id: 'del-1' },
       data: { statut: 'EXPEDIEE' },
+      select: { id: true, statut: true, commandeId: true },
+    });
+    expect(tx.commande.findUnique).not.toHaveBeenCalled();
+    expect(result.statut).toBe('EXPEDIEE');
+  });
+
+  it('syncs la Commande globale à LIVREE quand la livraison atteint LIVREE (R2)', async () => {
+    const { repository, tx } = buildUpdateRepository();
+    tx.livraison.update.mockResolvedValue({
+      id: 'del-1',
+      statut: 'LIVREE',
+      commandeId: CMD_ID,
+    });
+    tx.commande.findUnique.mockResolvedValue({ id: CMD_ID, statut: 'EXPEDIEE' });
+
+    const result = await repository.updateStatus('del-1', 'LIVREE');
+
+    expect(tx.commande.findUnique).toHaveBeenCalledWith({
+      where: { id: CMD_ID },
       select: { id: true, statut: true },
     });
-    expect(result.statut).toBe('EXPEDIEE');
+    expect(tx.commande.update).toHaveBeenCalledWith({
+      where: { id: CMD_ID },
+      data: { statut: 'LIVREE' },
+    });
+    expect(tx.commandeArtisan.updateMany).toHaveBeenCalledWith({
+      where: {
+        commandeId: CMD_ID,
+        statut: { notIn: ['LIVREE', 'CLOTUREE', 'ANNULEE', 'REMBOURSEE'] },
+      },
+      data: { statut: 'LIVREE' },
+    });
+    expect(result).toEqual({ id: 'del-1', statut: 'LIVREE' });
+  });
+
+  it('ne régresse pas une Commande CLOTUREE quand la livraison est LIVREE (R2)', async () => {
+    const { repository, tx } = buildUpdateRepository();
+    tx.livraison.update.mockResolvedValue({
+      id: 'del-1',
+      statut: 'LIVREE',
+      commandeId: CMD_ID,
+    });
+    tx.commande.findUnique.mockResolvedValue({ id: CMD_ID, statut: 'CLOTUREE' });
+
+    await repository.updateStatus('del-1', 'LIVREE');
+
+    expect(tx.commande.update).not.toHaveBeenCalled();
+    expect(tx.commandeArtisan.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('ne régresse pas une Commande ANNULEE quand la livraison est LIVREE (R2)', async () => {
+    const { repository, tx } = buildUpdateRepository();
+    tx.livraison.update.mockResolvedValue({
+      id: 'del-1',
+      statut: 'LIVREE',
+      commandeId: CMD_ID,
+    });
+    tx.commande.findUnique.mockResolvedValue({ id: CMD_ID, statut: 'ANNULEE' });
+
+    await repository.updateStatus('del-1', 'LIVREE');
+
+    expect(tx.commande.update).not.toHaveBeenCalled();
+    expect(tx.commandeArtisan.updateMany).not.toHaveBeenCalled();
   });
 });
 

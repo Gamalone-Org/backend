@@ -17,6 +17,7 @@ function buildService(overrides = {}) {
     findByIdSummary: vi.fn(),
     findForAdmin: vi.fn(),
     updateStatut: vi.fn(),
+    releaseOeuvres: vi.fn(),
     ...overrides,
   } as any;
   return { service: new OrderService(repository), repository };
@@ -281,5 +282,78 @@ describe('OrderService business rules', () => {
     repository.findByIdSummary.mockResolvedValue({ id: 'cmd-1', statut: 'ANNULEE' });
 
     await expect(service.annuler('cmd-1')).rejects.toThrow(ConflictError);
+  });
+
+  it.each(['COMMANDE', 'PREPARATION', 'EXPEDIEE'])(
+    'cancellation from %s releases the artworks (releaseOeuvres called)',
+    async (from) => {
+      const { service, repository } = buildService();
+      repository.findByIdSummary.mockResolvedValue({ id: 'cmd-1', statut: from });
+      repository.updateStatut.mockResolvedValue({ id: 'cmd-1', statut: 'ANNULEE' });
+      repository.releaseOeuvres.mockResolvedValue(undefined);
+
+      await service.annuler('cmd-1');
+
+      expect(repository.updateStatut).toHaveBeenCalledWith('cmd-1', 'ANNULEE');
+      expect(repository.releaseOeuvres).toHaveBeenCalledWith('cmd-1');
+    }
+  );
+
+  it.each(['LIVREE', 'CLOTUREE', 'ANNULEE', 'REMBOURSEE'])(
+    'cancellation is refused from %s and no artwork is released',
+    async (from) => {
+      const { service, repository } = buildService();
+      repository.findByIdSummary.mockResolvedValue({ id: 'cmd-1', statut: from });
+
+      await expect(service.annuler('cmd-1')).rejects.toThrow(ConflictError);
+      expect(repository.updateStatut).not.toHaveBeenCalled();
+      expect(repository.releaseOeuvres).not.toHaveBeenCalled();
+    }
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Espace Acheteur — liste « Mes commandes »
+// ---------------------------------------------------------------------------
+describe('OrderService.getMyCommandes (filtres / recherche / tri)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('resolves the buyer profile and forwards every filter to the repository', async () => {
+    const { service, repository } = buildService();
+    repository.findBuyerProfileByUserId.mockResolvedValue({ id: 'bp-1' });
+    repository.findForAcheteur.mockResolvedValue({ commandes: [{ id: 'cmd-1' }], total: 1 });
+
+    const result = await service.getMyCommandes('user-1', 2, 10, {
+      statuts: ['COMMANDE', 'PREPARATION'],
+      q: 'sculpture',
+      tri: 'dateCreation_asc',
+    });
+
+    expect(repository.findForAcheteur).toHaveBeenCalledWith('bp-1', 2, 10, {
+      statuts: ['COMMANDE', 'PREPARATION'],
+      q: 'sculpture',
+      tri: 'dateCreation_asc',
+    });
+    expect(result).toEqual({ commandes: [{ id: 'cmd-1' }], total: 1, page: 2, limit: 10 });
+  });
+
+  it('defaults to an empty filter set when none are provided (backward compat)', async () => {
+    const { service, repository } = buildService();
+    repository.findBuyerProfileByUserId.mockResolvedValue({ id: 'bp-1' });
+    repository.findForAcheteur.mockResolvedValue({ commandes: [], total: 0 });
+
+    await service.getMyCommandes('user-1', 1, 20);
+
+    expect(repository.findForAcheteur).toHaveBeenCalledWith('bp-1', 1, 20, {});
+  });
+
+  it('rejects a user without a buyer profile (isolation, no repository call)', async () => {
+    const { service, repository } = buildService();
+    repository.findBuyerProfileByUserId.mockResolvedValue(null);
+
+    await expect(
+      service.getMyCommandes('user-1', 1, 20, { q: 'sculpture' })
+    ).rejects.toThrow(ForbiddenError);
+    expect(repository.findForAcheteur).not.toHaveBeenCalled();
   });
 });

@@ -42,6 +42,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
   },
   requireRole: () => (_req: any, _res: any, next: any) => next(),
   requireAdminLevel: () => (_req: any, _res: any, next: any) => next(),
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 vi.mock('../../src/modules/kyc/kyc.factory.js', () => ({
@@ -105,7 +106,7 @@ describe('Marketplace admin moderation', () => {
 
   it('POST /api/v1/admin/oeuvres/:id/publish returns 409 when ConflictError', async () => {
     mockPublish.mockRejectedValueOnce(
-      new ConflictError('Seules les œuvres non publiées peuvent être publiées')
+      new ConflictError('Seules les Å“uvres non publiÃ©es peuvent Ãªtre publiÃ©es')
     );
     const response = await request(app).post(`/api/v1/admin/oeuvres/${OEUVRE_ID}/publish`);
     expect(response.status).toBe(409);
