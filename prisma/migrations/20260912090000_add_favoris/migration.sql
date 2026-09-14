@@ -1,6 +1,6 @@
 -- Migration: Add Favori (Mes favoris acheteur)
 --
--- Creates the Favori model (Espace Acheteur → Mes favoris). A Favori links a
+-- Creates the Favori model (Espace Acheteur -> Mes favoris). A Favori links a
 -- BuyerProfile to an Oeuvre. The composite unique constraint (acheteurId,
 -- oeuvreId) is the database-level guarantee against duplicates for the same
 -- (acheteur, oeuvre) pair, even under concurrent requests.

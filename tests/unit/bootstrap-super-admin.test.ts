@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { type PrismaClient, type Prisma } from '../../src/generated/prisma/client.js';
 import { BootstrapSuperAdminService } from '../../src/modules/admin/administrateurs/bootstrap-super-admin.service';
-import { ConflictError } from '../../src/common/errors/AppError';
+import { ConflictError, ValidationError } from '../../src/common/errors/AppError';
 import { PhoneService } from '../../src/modules/auth/services/PhoneService';
 
 const SUPER_ADMIN_COUNT_WHERE = {
@@ -60,6 +60,7 @@ describe('BootstrapSuperAdminService', () => {
   const validInput = {
     telephone: '+22890123456',
     motDePasse: 'S3cretPass!',
+    username: 'awa.mensah',
     nom: 'Awa Mensah',
     email: 'awa@exemple.com',
     departement: 'Direction',
@@ -77,8 +78,8 @@ describe('BootstrapSuperAdminService', () => {
 
     // Aucun SUPER_ADMIN existant -> vérification de départ.
     expect(mocks.userCount).toHaveBeenCalledWith(SUPER_ADMIN_COUNT_WHERE);
-    // Unicité téléphone/e-mail.
-    expect(mocks.userFindUnique).toHaveBeenCalledTimes(2);
+    // Unicité username + e-mail + téléphone.
+    expect(mocks.userFindUnique).toHaveBeenCalledTimes(3);
     // Le mot de passe est hashé par le service officiel, jamais stocké en clair.
     expect(passwordService.hash).toHaveBeenCalledWith('S3cretPass!');
     expect(mocks.userCreate).toHaveBeenCalledWith(
@@ -86,6 +87,7 @@ describe('BootstrapSuperAdminService', () => {
         data: expect.objectContaining({
           telephone: '+22890123456',
           email: 'awa@exemple.com',
+          username: 'awa.mensah',
           role: 'ADMIN',
           statut: 'ACTIF',
           telephoneVerificationStatus: 'VERIFIE',
@@ -116,6 +118,7 @@ describe('BootstrapSuperAdminService', () => {
       telephone: '+22890123456',
       nom: 'Awa Mensah',
       email: 'awa@exemple.com',
+      username: 'awa.mensah',
       departement: 'Direction',
     });
     expect(JSON.stringify(result)).not.toContain('S3cretPass!');
@@ -147,16 +150,72 @@ describe('BootstrapSuperAdminService', () => {
   it('refuse un téléphone déjà utilisé', async () => {
     const { service, mocks } = makeFixture();
     mocks.userCount.mockResolvedValue(0);
-    mocks.userFindUnique.mockResolvedValue({ id: 'autre-compte' });
+    mocks.userFindUnique.mockImplementation((args: { where: { telephone?: string } }) =>
+      Promise.resolve(args.where.telephone ? { id: 'autre-compte' } : null)
+    );
 
     await expect(service.execute(validInput)).rejects.toBeInstanceOf(ConflictError);
     expect(mocks.userCreate).not.toHaveBeenCalled();
   });
 
+  it('refuse un username déjà utilisé', async () => {
+    const { service, mocks } = makeFixture();
+    mocks.userCount.mockResolvedValue(0);
+    mocks.userFindUnique.mockImplementation((args: { where: { username?: string } }) =>
+      Promise.resolve(args.where.username ? { id: 'autre-compte' } : null)
+    );
+
+    await expect(service.execute(validInput)).rejects.toBeInstanceOf(ConflictError);
+    expect(mocks.userCreate).not.toHaveBeenCalled();
+  });
+
+  it('refuse un username invalide (format)', async () => {
+    const { service, mocks } = makeFixture();
+    mocks.userCount.mockResolvedValue(0);
+    mocks.userFindUnique.mockResolvedValue(null);
+
+    await expect(
+      service.execute({ ...validInput, username: 'AWA MenSah!' })
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      service.execute({ ...validInput, username: '.awa' })
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      service.execute({ ...validInput, username: 'awa.' })
+    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      service.execute({ ...validInput, username: 'ab c' })
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(mocks.userCreate).not.toHaveBeenCalled();
+    expect(mocks.userFindUnique).not.toHaveBeenCalled();
+  });
+
+  it('normalise le username en minuscules sans espaces', async () => {
+    const { service, mocks, passwordService } = makeFixture();
+    mocks.userCount.mockResolvedValue(0);
+    mocks.userFindUnique.mockResolvedValue(null);
+    passwordService.hash.mockResolvedValue('scrypt$cache$hash');
+    mocks.userCreate.mockResolvedValue({ id: 'user-1' });
+    mocks.adminProfileCreate.mockResolvedValue({ id: 'profile-1' });
+
+    const result = await service.execute({
+      ...validInput,
+      username: '  Awa.Mensah  ',
+    });
+
+    expect(mocks.userFindUnique).toHaveBeenCalledWith({ where: { username: 'awa.mensah' } });
+    expect(mocks.userCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ username: 'awa.mensah' }),
+      })
+    );
+    expect(result.username).toBe('awa.mensah');
+  });
+
   it('refuse un e-mail déjà utilisé', async () => {
     const { service, mocks } = makeFixture();
     mocks.userCount.mockResolvedValue(0);
-    mocks.userFindUnique.mockImplementationOnce((args: { where: { email?: string } }) =>
+    mocks.userFindUnique.mockImplementation((args: { where: { email?: string } }) =>
       Promise.resolve(args.where.email ? { id: 'autre-compte' } : null)
     );
 

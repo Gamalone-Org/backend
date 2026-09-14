@@ -56,6 +56,12 @@ export class UserService {
       throw new ForbiddenError('Seul un SUPER_ADMIN peut créer un compte ADMIN');
     }
 
+    if ((input.niveauAcces as string | undefined) === 'SUPER_ADMIN') {
+      throw new ForbiddenError(
+        "La création d'un compte SUPER_ADMIN via l'API est interdite. Utilisez le bootstrap dédié ou une promotion via mise à jour de rôle."
+      );
+    }
+
     const existingByPhone = await this.repository.findByTelephone(telephone);
     if (existingByPhone) {
       throw new ConflictError('Un compte avec ce numéro de téléphone existe déjà');

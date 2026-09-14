@@ -17,10 +17,16 @@ const tags = [
   { name: 'Certificates', description: 'Certificates and validation assets' },
   { name: 'KYC', description: 'Identity validation flows' },
   { name: 'Admin', description: 'Administrative actions' },
+  { name: 'Admin KYC', description: 'Admin KYC review and operations' },
+  { name: 'Admin Administrateurs', description: 'Admin management of administrator accounts' },
+  { name: 'Admin Dashboard', description: 'Admin dashboard statistics and overview' },
+  { name: 'Admin Artisans', description: 'Admin artisan profile management' },
+  { name: 'Commandes', description: 'Client order management' },
   { name: 'Articles', description: 'Articles éditoriaux (back-office Admin)' },
   { name: 'Notifications', description: 'Notifications and messaging' },
   { name: 'Support', description: 'Support and aid flows' },
   { name: 'Favoris', description: 'Mes favoris acheteur (Espace Acheteur)' },
+  { name: 'Acheteur', description: 'Espace Acheteur : paramètres et préférences' },
   { name: 'Health', description: 'System health endpoints' },
 ];
 
@@ -324,9 +330,9 @@ export const swaggerDocument = {
     '/api/v1/auth/login': {
       post: {
         tags: ['Auth'],
-        summary: 'Login with phone and password',
+        summary: 'Login with identifier (username, phone or email) and password',
         description:
-          'Authenticates a user with phone + password and returns a Bearer JWT. The optional role field only checks frontend space coherence (Acheteur/Artisan); privileges always come from User.role in the database. Does not reveal whether a phone number exists.',
+          'Authenticates a user and returns a Bearer JWT. The account is resolved from `identifier` by content: an email if it contains "@", a phone number if it is phone-like (default international format, or old clients can use the legacy `telephone` field), otherwise a username. The optional role field only checks frontend space coherence (Acheteur/Artisan/Admin); privileges always come from User.role in the database. Does not reveal whether an account exists.',
         security: [],
         requestBody: {
           required: true,
@@ -334,11 +340,28 @@ export const swaggerDocument = {
             'application/json': {
               schema: { $ref: '#/components/schemas/AuthLoginRequest' },
               examples: {
-                main: {
+                admin_by_username: {
+                  summary: 'Admin login by username',
+                  value: {
+                    identifier: 'g.apedo',
+                    motDePasse: 'S3cretPassword!',
+                    role: 'ADMIN',
+                  },
+                },
+                acheteur_by_phone: {
+                  summary: 'Acheteur login by phone',
                   value: {
                     telephone: '+22890123456',
                     motDePasse: 'S3cretPassword!',
                     role: 'ACHETEUR',
+                  },
+                },
+                artisan_by_email: {
+                  summary: 'Artisan login by email',
+                  value: {
+                    identifier: 'artisan@example.com',
+                    motDePasse: 'S3cretPassword!',
+                    role: 'ARTISAN',
                   },
                 },
               },
@@ -363,7 +386,7 @@ export const swaggerDocument = {
               },
             },
           },
-          '400': { description: 'Invalid phone or malformed request body' },
+          '400': { description: 'Invalid identifier or malformed request body (neither identifier nor telephone provided)' },
           '401': { description: 'Invalid credentials or password auth not enabled (use OTP)' },
           '403': {
             description:
@@ -1199,7 +1222,14 @@ export const swaggerDocument = {
           },
         ],
         responses: {
-          '200': { description: 'List of favorites (favoris, total, page, limit)' },
+          '200': {
+            description: 'List of favorites (favoris, total, page, limit)',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/FavoriListResponse' },
+              },
+            },
+          },
           '400': { description: 'Invalid query parameters' },
           '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: authenticated user is not a buyer' },
@@ -1238,6 +1268,70 @@ export const swaggerDocument = {
           '400': { description: 'Invalid oeuvreId parameter' },
           '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: authenticated user is not a buyer' },
+        },
+      },
+    },
+    '/api/v1/acheteur/parametres': {
+      get: {
+        tags: ['Acheteur'],
+        summary: 'Get my buyer settings',
+        description:
+          'Retourne les paramètres de l’acheteur connecté : langue (fr/en), devise d’affichage (XOF/EUR/USD, ne modifie jamais les montants stockés en base) et préférences de notification (email, sms, push). Le BuyerProfile est résolu exclusivement depuis le JWT (req.user.id), jamais depuis un identifiant fourni par le client.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'Buyer settings',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    parametres: { $ref: '#/components/schemas/BuyerParametres' },
+                  },
+                  required: ['success', 'parametres'],
+                },
+              },
+            },
+          },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an ACHETEUR' },
+        },
+      },
+      patch: {
+        tags: ['Acheteur'],
+        summary: 'Update my buyer settings (partial)',
+        description:
+          "Mise à jour partielle des paramètres de l'acheteur connecté : langue (fr/en), devise d'affichage (XOF/EUR/USD) et/ou préférences de notification. Validation Zod stricte (aucune clé inconnue acceptée). La devise est une simple préférence d'affichage : elle ne convertit rien, n'altère ni les commandes ni les paiements ni prixXOF. Les préférences de notification n'ont aucun effet d'envoi.",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/UpdateBuyerParametresRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Updated buyer settings',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' },
+                    parametres: { $ref: '#/components/schemas/BuyerParametres' },
+                  },
+                  required: ['success', 'message', 'parametres'],
+                },
+              },
+            },
+          },
+          '400': { description: 'Invalid payload (unknown/invalid field) or empty body' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an ACHETEUR' },
         },
       },
     },
@@ -1637,7 +1731,8 @@ export const swaggerDocument = {
       get: {
         tags: ['Orders'],
         summary: 'List my commands (acheteur)',
-        description: 'Paginated list of the authenticated ACHETEUR own orders.',
+        description:
+          'Paginated list of the authenticated ACHETEUR own orders, with optional filters: statut (comma-separated list of statuses), q (server-side search) and tri (ordering by creation date).',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
@@ -1647,9 +1742,44 @@ export const swaggerDocument = {
             required: false,
             schema: { type: 'integer', default: 20, maximum: 50 },
           },
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            description:
+              'Filtre multi-statuts : une ou plusieurs valeurs séparées par des virgules parmi COMMANDE, PREPARATION, EXPEDIEE, LIVREE, CLOTUREE, ANNULEE, REMBOURSEE.',
+            schema: {
+              type: 'string',
+              example: 'COMMANDE,PREPARATION',
+              enum: [
+                'COMMANDE',
+                'PREPARATION',
+                'EXPEDIEE',
+                'LIVREE',
+                'CLOTUREE',
+                'ANNULEE',
+                'REMBOURSEE',
+              ],
+            },
+          },
+          {
+            name: 'q',
+            in: 'query',
+            required: false,
+            description: 'Recherche serveur (numéro de commande, client, artisan ou oeuvre).',
+            schema: { type: 'string', maxLength: 255 },
+          },
+          {
+            name: 'tri',
+            in: 'query',
+            required: false,
+            description: 'Tri par date de création (défaut : dateCreation_desc).',
+            schema: { type: 'string', enum: ['dateCreation_desc', 'dateCreation_asc'], default: 'dateCreation_desc' },
+          },
         ],
         responses: {
           '200': { description: 'List of my orders' },
+          '400': { description: 'Invalid query parameter (statut, tri, ...)' },
           '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: Acheteur profile not found' },
         },
@@ -2186,6 +2316,71 @@ export const swaggerDocument = {
           '400': { description: 'Invalid query parameters' },
         },
       },
+    },
+    '/api/v1/categories/{id}': {
+      get: {
+        tags: ['Categories'],
+        summary: 'Get a category (public)',
+        description:
+          'Returns an ACTIVE category only. INACTIVE categories are not exposed publicly and return 404.',
+        security: [],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': { description: 'Category details' },
+          '400': { description: 'Invalid category id' },
+          '404': { description: 'Category not found or not ACTIVE' },
+        },
+      },
+    },
+    '/api/v1/admin/categories': {
+      get: {
+        tags: ['Categories'],
+        summary: 'List categories (admin)',
+        description:
+          'Admin listing of categories with optional filters: statut (ACTIVE/INACTIVE), q, page, limit. Includes INACTIVE categories and their sous-categories. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 100 },
+          },
+          {
+            name: 'statut',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+          },
+          { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Paginated list of categories (including INACTIVE)',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    items: { type: 'array', items: { type: 'object' } },
+                    total: { type: 'integer' },
+                    page: { type: 'integer' },
+                    limit: { type: 'integer' },
+                    totalPages: { type: 'integer' },
+                  },
+                },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+        },
+      },
       post: {
         tags: ['Categories'],
         summary: 'Create a category (admin)',
@@ -2219,7 +2414,7 @@ export const swaggerDocument = {
         },
       },
     },
-    '/api/v1/categories/export': {
+    '/api/v1/admin/categories/export': {
       get: {
         tags: ['Categories'],
         summary: 'Export categories as CSV (admin)',
@@ -2250,20 +2445,22 @@ export const swaggerDocument = {
         },
       },
     },
-    '/api/v1/categories/{id}': {
+    '/api/v1/admin/categories/{id}': {
       get: {
         tags: ['Categories'],
-        summary: 'Get a category (public)',
+        summary: 'Get a category (admin)',
         description:
-          'Returns an ACTIVE category only. INACTIVE categories are not exposed publicly and return 404.',
-        security: [],
+          'Returns a category whatever its statut (ACTIVE or INACTIVE), with its sous-categories. Requires SUPPORT admin level minimum.',
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
         ],
         responses: {
-          '200': { description: 'Category details' },
+          '200': { description: 'Category details (including INACTIVE)' },
           '400': { description: 'Invalid category id' },
-          '404': { description: 'Category not found or not ACTIVE' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: insufficient admin level' },
+          '404': { description: 'Category not found' },
         },
       },
       patch: {
@@ -2318,7 +2515,7 @@ export const swaggerDocument = {
         },
       },
     },
-    '/api/v1/categories/{id}/image': {
+    '/api/v1/admin/categories/{id}/image': {
       post: {
         tags: ['Categories'],
         summary: 'Upload category cover image (admin)',
@@ -2387,6 +2584,8 @@ export const swaggerDocument = {
           '404': { description: 'Category not found or not ACTIVE' },
         },
       },
+    },
+    '/api/v1/admin/categories/{categorieId}/sous-categories': {
       post: {
         tags: ['Categories'],
         summary: 'Create a sous-category (admin)',
@@ -2429,7 +2628,7 @@ export const swaggerDocument = {
         },
       },
     },
-    '/api/v1/categories/{categorieId}/sous-categories/{sousCategorieId}': {
+    '/api/v1/admin/categories/{categorieId}/sous-categories/{sousCategorieId}': {
       patch: {
         tags: ['Categories'],
         summary: 'Update a sous-category (admin)',
@@ -2505,7 +2704,7 @@ export const swaggerDocument = {
         },
       },
     },
-    '/api/v1/categories/{categorieId}/sous-categories/{sousCategorieId}/image': {
+    '/api/v1/admin/categories/{categorieId}/sous-categories/{sousCategorieId}/image': {
       post: {
         tags: ['Categories'],
         summary: 'Upload sous-category cover image (admin)',
@@ -2925,7 +3124,7 @@ export const swaggerDocument = {
         tags: ['Users'],
         summary: 'Create user (admin)',
         description:
-          'Créé un ACHETEUR/ARTISAN (MODERATEUR minimum) ou un ADMIN (SUPER_ADMIN uniquement). Le mot de passe est haché ; email et téléphone doivent être uniques.',
+          'Créé un ACHETEUR/ARTISAN (MODERATEUR minimum) ou un ADMIN (SUPER_ADMIN uniquement). Le mot de passe est haché ; email et téléphone doivent être uniques. Le niveau SUPER_ADMIN n’est pas proposé ici : le premier se crée via le bootstrap (npm run bootstrap:super-admin), les suivants via une promotion de rôle.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -4017,7 +4216,12 @@ export const swaggerDocument = {
             type: 'string',
             enum: ['ACTIF', 'INACTIF', 'SUSPENDU', 'EN_ATTENTE_VALIDATION'],
           },
-          niveauAcces: { type: 'string', enum: ['SUPPORT', 'MODERATEUR', 'SUPER_ADMIN'] },
+          niveauAcces: {
+            type: 'string',
+            enum: ['SUPPORT', 'MODERATEUR'],
+            description:
+              "Niveau d'accès pour un compte ADMIN. SUPER_ADMIN ne peut PAS être créé via l'API : le premier est initialisé par le bootstrap (npm run bootstrap:super-admin) et les suivants relèvent d'une promotion via la mise à jour de rôle.",
+          },
           artisanProfile: {
             type: 'object',
             properties: {
@@ -4181,6 +4385,114 @@ export const swaggerDocument = {
         },
         required: ['statut'],
       },
+      FavoriItem: {
+        type: 'object',
+        description:
+          'Favori de la liste « Mes favoris » : conserve le lien vers l’œuvre et expose son statut actuel, même si celle-ci est devenue VENDUE/RETIREE.',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          dateCreation: { type: 'string', format: 'date-time' },
+          oeuvre: { $ref: '#/components/schemas/FavoriOeuvreInfo' },
+        },
+        required: ['id', 'dateCreation', 'oeuvre'],
+      },
+      FavoriOeuvreInfo: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          titre: { type: 'string' },
+          prixXOF: { type: 'number' },
+          statut: {
+            type: 'string',
+            description: 'Statut actuel de l’œuvre (même si retirée du catalogue).',
+            enum: ['BROUILLON', 'EN_ATTENTE_VALIDATION', 'PUBLIEE', 'EN_PANIER', 'VENDUE', 'RETIREE'],
+          },
+          disponibilite: {
+            type: 'string',
+            enum: ['DISPONIBLE', 'SUR_COMMANDE', 'EN_EXPOSITION'],
+          },
+          artisan: { $ref: '#/components/schemas/FavoriArtisanInfo' },
+          medias: {
+            type: 'array',
+            description: 'Couverture : première image de type OEUVRE (une seule).',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                url: { type: 'string', format: 'uri' },
+              },
+              required: ['id', 'url'],
+            },
+          },
+        },
+        required: ['id', 'titre', 'prixXOF', 'statut', 'disponibilite', 'artisan', 'medias'],
+      },
+      FavoriArtisanInfo: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nomAtelier: { type: 'string' },
+          user: {
+            type: 'object',
+            properties: {
+              nom: { type: 'string', nullable: true },
+            },
+            required: ['nom'],
+          },
+        },
+        required: ['id', 'nomAtelier', 'user'],
+      },
+      FavoriListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          favoris: { type: 'array', items: { $ref: '#/components/schemas/FavoriItem' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+        },
+        required: ['success', 'favoris', 'total', 'page', 'limit'],
+      },
+      BuyerNotificationPreferences: {
+        type: 'object',
+        description:
+          'Canaux souhaités par l’acheteur (opt-in). Aucun envoi n’est déclenché par ces préférences.',
+        properties: {
+          email: { type: 'boolean' },
+          sms: { type: 'boolean' },
+          push: { type: 'boolean' },
+        },
+        required: ['email', 'sms', 'push'],
+      },
+      BuyerParametres: {
+        type: 'object',
+        description:
+          'Paramètres de l’acheteur. devise = préférence d’affichage uniquement, les montants stockés (prixXOF) ne sont jamais convertis.',
+        properties: {
+          langue: { type: 'string', enum: ['fr', 'en'] },
+          devise: { type: 'string', enum: ['XOF', 'EUR', 'USD'] },
+          notifications: { $ref: '#/components/schemas/BuyerNotificationPreferences' },
+        },
+        required: ['langue', 'devise', 'notifications'],
+      },
+      UpdateBuyerParametresRequest: {
+        type: 'object',
+        description:
+          'Mise à jour partielle (PATCH) : chaque clé est optionnelle mais au moins un champ doit être fourni. Les clés inconnues (acheteurId, buyerProfileId, userId…) sont rejetées (validation stricte).',
+        properties: {
+          langue: { type: 'string', enum: ['fr', 'en'], example: 'fr' },
+          devise: { type: 'string', enum: ['XOF', 'EUR', 'USD'], example: 'XOF' },
+          notifications: {
+            type: 'object',
+            description: 'Mise à jour partielle du sous-objet : seuls les canaux fournis sont modifiés.',
+            properties: {
+              email: { type: 'boolean', example: true },
+              sms: { type: 'boolean', example: false },
+              push: { type: 'boolean', example: false },
+            },
+          },
+        },
+      },
       AuthOtpSendRequest: {
         type: 'object',
         properties: {
@@ -4230,15 +4542,26 @@ export const swaggerDocument = {
       AuthLoginRequest: {
         type: 'object',
         properties: {
-          telephone: { type: 'string', example: '+22890123456' },
+          identifier: {
+            type: 'string',
+            example: 'g.apedo',
+            description:
+              'Compte à authentifier, résolu par contenu : email si "@", téléphone international si "phone-like", sinon username. Au moins un parmi identifier ou telephone est requis.',
+          },
+          telephone: {
+            type: 'string',
+            example: '+22890123456',
+            description:
+              'Champ hérité des anciens clients : équivalent à identifier pour un numéro de téléphone. Conservé par rétrocompatibilité.',
+          },
           motDePasse: { type: 'string', format: 'password', example: 'S3cretPassword!' },
           role: {
             type: 'string',
-            enum: ['ACHETEUR', 'ARTISAN'],
+            enum: ['ACHETEUR', 'ARTISAN', 'ADMIN'],
             description: 'Optional frontend space selection, only used to check UX coherence',
           },
         },
-        required: ['telephone', 'motDePasse'],
+        required: ['motDePasse'],
       },
       AuthUserPublic: {
         type: 'object',

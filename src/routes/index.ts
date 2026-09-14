@@ -25,6 +25,7 @@ import { adminDisputeRouter } from '../modules/disputes/dispute.routes.js';
 import { artisanProfilRouter } from '../modules/artisan-profile/artisan-profile.routes.js';
 import { adminAdministrateursRouter } from '../modules/admin/administrateurs/index.js';
 import { favoriRouter } from '../modules/favorites/favorites.routes.js';
+import { buyerParametresRouter } from '../modules/buyer-settings/buyer-settings.routes.js';
 
 const router = Router();
 
@@ -73,5 +74,7 @@ router.use('/v1/admin/litiges', adminDisputeRouter);
 router.use('/v1/admin/administrateurs', adminAdministrateursRouter);
 
 router.use('/v1/favoris', favoriRouter);
+
+router.use('/v1/acheteur/parametres', buyerParametresRouter);
 
 export default router;

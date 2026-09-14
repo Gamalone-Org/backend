@@ -36,7 +36,13 @@ export const createUserSchema = z
     telephone: telephoneSchema,
     motDePasse: motDePasseSchema,
     statut: z.enum(USER_STATUSES).optional(),
-    niveauAcces: z.enum(ADMIN_LEVELS).optional(),
+    niveauAcces: z
+      .enum(ADMIN_LEVELS)
+      .refine((level) => level !== 'SUPER_ADMIN', {
+        message:
+          "SUPER_ADMIN ne peut pas être créé via l'API. Utilisez le bootstrap dédié (npm run bootstrap:super-admin) ou une promotion via la mise à jour de rôle.",
+      })
+      .optional(),
     artisanProfile: z
       .object({
         type: z.enum(ARTISAN_TYPES).optional(),
