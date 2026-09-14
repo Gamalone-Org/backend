@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ArtisanType } from '../../generated/prisma/client.js';
+import { loginIdentifierSchema } from './username.js';
 
 const telephoneSchema = z.string().trim().min(1, 'Phone number is required');
 
@@ -35,13 +36,7 @@ export const registerSchema = z.discriminatedUnion('role', [
     .strict(),
 ]);
 
-export const loginSchema = z
-  .object({
-    telephone: telephoneSchema,
-    motDePasse: z.string().min(1, 'Password is required').max(128),
-    role: z.enum(['ACHETEUR', 'ARTISAN']).optional(),
-  })
-  .strict();
+export const loginSchema = loginIdentifierSchema;
 
 export const verifyPhoneSchema = z
   .object({

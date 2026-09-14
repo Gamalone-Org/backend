@@ -1,13 +1,15 @@
 import { type PrismaClient, type Prisma } from '../../../generated/prisma/client.js';
-import { ConflictError } from '../../../common/errors/AppError.js';
+import { ConflictError, ValidationError } from '../../../common/errors/AppError.js';
 import { PasswordService } from '../../auth/services/PasswordService.js';
 import { PhoneService } from '../../auth/services/PhoneService.js';
+import { isValidUsername, normalizeUsername } from '../../auth/username.js';
 
 export type BootstrapSuperAdminInput = {
   telephone: string;
   motDePasse: string;
   nom?: string;
   email?: string;
+  username?: string;
   departement?: string;
 };
 
@@ -17,6 +19,7 @@ export type BootstrapSuperAdminResult = {
   telephone: string;
   nom: string;
   email: string | null;
+  username: string | null;
   departement: string;
 };
 
@@ -60,6 +63,19 @@ export class BootstrapSuperAdminService {
     const email = input.email ? input.email.trim().toLowerCase() : null;
     const nom = input.nom?.trim() ?? '';
     const departement = input.departement?.trim() ?? '';
+    const username = input.username ? normalizeUsername(input.username) : null;
+
+    if (username) {
+      if (!isValidUsername(username)) {
+        throw new ValidationError(
+          'Username invalide : 3-30 caractères (a-z, 0-9, point, tiret, underscore), en minuscules, sans espace, et sans séparateur en début ou fin.'
+        );
+      }
+      const existingUsername = await this.prisma.user.findUnique({ where: { username } });
+      if (existingUsername) {
+        throw new ConflictError('Un compte existe déjà avec ce nom d’utilisateur.');
+      }
+    }
 
     if (email) {
       const existing = await this.prisma.user.findUnique({ where: { email } });
@@ -82,6 +98,7 @@ export class BootstrapSuperAdminService {
             telephone,
             email,
             nom,
+            username,
             motDePasse: motDePasseHash,
             role: 'ADMIN',
             statut: 'ACTIF',
@@ -117,6 +134,7 @@ export class BootstrapSuperAdminService {
       telephone,
       nom,
       email,
+      username,
       departement,
     };
   }

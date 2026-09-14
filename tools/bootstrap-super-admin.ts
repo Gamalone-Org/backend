@@ -5,7 +5,7 @@
  *
  * Usage :
  *   npm run bootstrap:super-admin -- --telephone=+22890123456 --motDePasse='S3cretPass!' \
- *     --nom='Awa Mensah' --email=awa@exemple.com --departement='Direction'
+ *     --username='awa.mensah' --nom='Awa Mensah' --email=awa@exemple.com --departement='Direction'
  *   BOOTSTRAP_ADMIN_TELEPHONE=+22890123456 BOOTSTRAP_ADMIN_MOTDEPASSE='...' npm run bootstrap:super-admin
  *
  * Règles de sécurité respectées :
@@ -50,7 +50,7 @@ function requiredArg(name: string): string {
 function usage(): void {
   console.error(
     'Usage: npm run bootstrap:super-admin -- --telephone=+228XXXXXXXX --motDePasse=... ' +
-      '[--nom=...] [--email=...] [--departement=...]'
+      '[--username=...] [--nom=...] [--email=...] [--departement=...]'
   );
 }
 
@@ -58,6 +58,7 @@ async function main(): Promise<void> {
   try {
     const telephone = requiredArg('telephone');
     const motDePasse = requiredArg('motDePasse');
+    const username = argValue('username');
     const nom = argValue('nom');
     const email = argValue('email');
     const departement = argValue('departement');
@@ -65,6 +66,7 @@ async function main(): Promise<void> {
     const result = await bootstrapService.execute({
       telephone,
       motDePasse,
+      username,
       nom,
       email,
       departement,
@@ -72,6 +74,7 @@ async function main(): Promise<void> {
 
     console.log('✅ Premier SUPER_ADMIN créé avec succès.');
     console.log(`   Téléphone : ${result.telephone}`);
+    console.log(`   Username : ${result.username ?? '(non renseigné)'}`);
     console.log(`   Nom : ${result.nom || '(non renseigné)'}`);
     console.log(`   Email : ${result.email ?? '(non renseigné)'}`);
     console.log(`   Département : ${result.departement || '(non renseigné)'}`);

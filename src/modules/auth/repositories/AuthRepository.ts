@@ -11,6 +11,7 @@ import {
 export type CreateUserWithCredentialsInput = {
   telephone: string;
   email?: string | null;
+  username?: string | null;
   nom?: string | null;
   motDePasseHash: string;
   role: UserRole;
@@ -42,6 +43,12 @@ export class AuthRepository {
     });
   }
 
+  async findByUsername(username: string) {
+    return this.prisma.user.findUnique({
+      where: { username },
+    });
+  }
+
   async findById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
@@ -52,6 +59,7 @@ export class AuthRepository {
     const userData = {
       telephone: data.telephone,
       email: data.email ?? null,
+      username: data.username ?? null,
       nom: data.nom ?? null,
       motDePasse: data.motDePasseHash,
       role: data.role,

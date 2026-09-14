@@ -240,6 +240,7 @@ model User {
   id                          String                  @id @default(uuid()) @db.Uuid
   email                       String?                 @unique
   nom                         String?
+  username                    String?                 @unique
   motDePasse                  String?
   telephone                   String                  @unique
   statut                      UserStatus              @default(EN_ATTENTE_VALIDATION)
@@ -397,14 +398,22 @@ model AdminAuditLog {
 }
 
 model BuyerProfile {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @unique @db.Uuid
-  adresseLivraison String
-  devise           String    @default("XOF")
-  langue           String    @default("fr")
-  typeClient       BuyerType @default(PARTICULIER)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @unique @db.Uuid
+  adresseLivraison   String
+  devise             String    @default("XOF")
+  langue             String    @default("fr")
+  typeClient         BuyerType @default(PARTICULIER)
+
+  // --- Paramètres acheteur : préférences de notification (opt-in) ---
+  // Aucun envoi déclenché ici : ces colonnes indiquent uniquement les canaux
+  // souhaités par l'acheteur (email / sms / push). Valeur par défaut false.
+  notificationsEmail Boolean   @default(false)
+  notificationsSms   Boolean   @default(false)
+  notificationsPush  Boolean   @default(false)
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   commandes Commande[]

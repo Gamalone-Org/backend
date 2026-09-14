@@ -33,6 +33,7 @@ function buildService(
   options: {
     findByPhone?: unknown;
     findByEmail?: unknown;
+    findByUsername?: unknown;
     createUserWithCredentials?: unknown;
     isUniqueConstraintError?: (error: unknown) => boolean;
     passwordHash?: unknown;
@@ -43,6 +44,7 @@ function buildService(
   const repository = {
     findByPhone: options.findByPhone ?? vi.fn().mockResolvedValue(null),
     findByEmail: options.findByEmail ?? vi.fn().mockResolvedValue(null),
+    findByUsername: options.findByUsername ?? vi.fn().mockResolvedValue(null),
     createUserWithCredentials:
       options.createUserWithCredentials ?? vi.fn().mockResolvedValue(baseUser),
     updatePhoneVerification: vi
@@ -339,7 +341,7 @@ describe('AuthService.login', () => {
     expect(repository.findByPhone).toHaveBeenCalledWith('+22890123456');
     expect(passwordService.compare).toHaveBeenCalledWith('S3cretPassword!', baseUser.motDePasse);
     expect(jwtService.generateToken).toHaveBeenCalledWith({ id: 'user-1', role: 'ACHETEUR' });
-    expect(limiter.reset).toHaveBeenCalledWith('+22890123456', 'unknown');
+    expect(limiter.reset).toHaveBeenCalledWith('phone:+22890123456', 'unknown');
     expect(result).toHaveProperty('accessToken', 'jwt.token');
     expect(result).toHaveProperty('tokenType', 'Bearer');
     expect(result.user.role).toBe('ACHETEUR');
@@ -368,7 +370,7 @@ describe('AuthService.login', () => {
       service.login({ telephone: '+22890123456', motDePasse: 'S3cretPassword!' })
     ).rejects.toThrow(UnauthorizedError);
 
-    expect(limiter.recordFailure).toHaveBeenCalledWith('+22890123456', 'unknown');
+    expect(limiter.recordFailure).toHaveBeenCalledWith('phone:+22890123456', 'unknown');
     expect(limiter.check).not.toHaveBeenCalled();
   });
 
@@ -383,7 +385,7 @@ describe('AuthService.login', () => {
     ).rejects.toThrow(UnauthorizedError);
 
     expect(passwordService.compare).toHaveBeenCalled();
-    expect(limiter.recordFailure).toHaveBeenCalledWith('+22890123456', 'unknown');
+    expect(limiter.recordFailure).toHaveBeenCalledWith('phone:+22890123456', 'unknown');
     expect(limiter.reset).not.toHaveBeenCalled();
   });
 
@@ -469,5 +471,75 @@ describe('AuthService.login', () => {
     await expect(
       service.login({ telephone: '+22890123456', motDePasse: 'S3cretPassword!' })
     ).rejects.toThrow(LoginRateLimitedError);
+  });
+
+  it('logs in an ADMIN via a username identifier', async () => {
+    const adminUser = {
+      ...baseUser,
+      id: 'admin-1',
+      username: 'g.apedo',
+      role: 'ADMIN',
+      statut: 'ACTIF',
+    };
+    const { service, repository, jwtService, limiter } = buildService({
+      findByUsername: vi.fn().mockResolvedValue(adminUser),
+    });
+
+    const result = await service.login({
+      identifier: 'g.apedo',
+      motDePasse: 'S3cretPassword!',
+      role: 'ADMIN',
+    });
+
+    expect(repository.findByUsername).toHaveBeenCalledWith('g.apedo');
+    expect(repository.findByPhone).not.toHaveBeenCalled();
+    expect(jwtService.generateToken).toHaveBeenCalledWith({ id: 'admin-1', role: 'ADMIN' });
+    expect(result.user.role).toBe('ADMIN');
+    expect(limiter.reset).toHaveBeenCalledWith('username:g.apedo', 'unknown');
+  });
+
+  it('logs in via an email identifier (normalized to lowercase)', async () => {
+    const { service, repository, limiter } = buildService({
+      findByEmail: vi.fn().mockResolvedValue(baseUser),
+    });
+
+    const result = await service.login({
+      identifier: '  AWA@Exemple.COM ',
+      motDePasse: 'S3cretPassword!',
+    });
+
+    expect(repository.findByEmail).toHaveBeenCalledWith('awa@exemple.com');
+    expect(repository.findByPhone).not.toHaveBeenCalled();
+    expect(result.user.role).toBe('ACHETEUR');
+    expect(limiter.reset).toHaveBeenCalledWith('email:awa@exemple.com', 'unknown');
+  });
+
+  it('resolves a phone-like identifier through the phone lookup', async () => {
+    const { service, repository } = buildService({
+      findByPhone: vi.fn().mockResolvedValue(baseUser),
+    });
+
+    await service.login({
+      identifier: '+22890123456',
+      motDePasse: 'S3cretPassword!',
+    });
+
+    expect(repository.findByPhone).toHaveBeenCalledWith('+22890123456');
+    expect(repository.findByUsername).not.toHaveBeenCalled();
+  });
+
+  it('prefers identifier over the legacy telephone field when both are provided', async () => {
+    const { service, repository } = buildService({
+      findByUsername: vi.fn().mockResolvedValue(baseUser),
+    });
+
+    await service.login({
+      telephone: '+22890123456',
+      identifier: 'awa.mensah',
+      motDePasse: 'S3cretPassword!',
+    });
+
+    expect(repository.findByUsername).toHaveBeenCalledWith('awa.mensah');
+    expect(repository.findByPhone).not.toHaveBeenCalled();
   });
 });

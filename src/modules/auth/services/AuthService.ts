@@ -7,6 +7,7 @@ import { LoginRateLimiter } from './LoginRateLimiter.js';
 import { AuthRepository } from '../repositories/AuthRepository.js';
 import { createSmsService } from '../../../config/sms-factory.js';
 import type { SmsService } from '../interfaces/SmsService.js';
+import { resolveLoginIdentifier } from '../username.js';
 import {
   ConflictError,
   ForbiddenError,
@@ -37,9 +38,10 @@ export type RegisterInput = {
 };
 
 export type LoginInput = {
-  telephone: string;
+  telephone?: string;
+  identifier?: string;
   motDePasse: string;
-  role?: 'ACHETEUR' | 'ARTISAN';
+  role?: 'ACHETEUR' | 'ARTISAN' | 'ADMIN';
 };
 
 export type AuthResponse = {
@@ -178,17 +180,40 @@ export class AuthService {
   }
 
   async login(input: LoginInput, ip?: string): Promise<AuthResponse> {
-    const normalizedPhone = this.phoneService.normalize(input.telephone);
     const clientIp = ip ?? 'unknown';
+    const resolved = resolveLoginIdentifier({
+      identifier: input.identifier,
+      telephone: input.telephone,
+    });
 
-    const user = await this.authRepository.findByPhone(normalizedPhone);
+    let user: User | null = null;
+    let rateLimitKey: string;
+
+    switch (resolved.type) {
+      case 'phone': {
+        const normalizedPhone = this.phoneService.normalize(resolved.value);
+        rateLimitKey = `phone:${normalizedPhone}`;
+        user = await this.authRepository.findByPhone(normalizedPhone);
+        break;
+      }
+      case 'email': {
+        rateLimitKey = `email:${resolved.value}`;
+        user = await this.authRepository.findByEmail(resolved.value);
+        break;
+      }
+      case 'username': {
+        rateLimitKey = `username:${resolved.value}`;
+        user = await this.authRepository.findByUsername(resolved.value);
+        break;
+      }
+    }
 
     if (!user) {
-      this.loginRateLimiter.recordFailure(normalizedPhone, clientIp);
+      this.loginRateLimiter.recordFailure(rateLimitKey, clientIp);
       throw new UnauthorizedError('Invalid credentials');
     }
 
-    this.loginRateLimiter.check(normalizedPhone, clientIp);
+    this.loginRateLimiter.check(rateLimitKey, clientIp);
 
     if (user.statut === 'SUSPENDU' || user.statut === 'INACTIF') {
       throw new ForbiddenError('Account is not active');
@@ -203,13 +228,13 @@ export class AuthService {
     const isValidPassword = await this.passwordService.compare(input.motDePasse, user.motDePasse);
 
     if (!isValidPassword) {
-      this.loginRateLimiter.recordFailure(normalizedPhone, clientIp);
+      this.loginRateLimiter.recordFailure(rateLimitKey, clientIp);
       throw new UnauthorizedError('Invalid credentials');
     }
 
     if (input.role && input.role !== user.role) {
       throw new ForbiddenError(
-        `This phone number belongs to a ${user.role} account. Please use the ${user.role} space instead.`
+        `This account belongs to a ${user.role} account. Please use the ${user.role} space instead.`
       );
     }
 
@@ -219,7 +244,7 @@ export class AuthService {
       );
     }
 
-    this.loginRateLimiter.reset(normalizedPhone, clientIp);
+    this.loginRateLimiter.reset(rateLimitKey, clientIp);
 
     return this.buildAuthResponse(user);
   }
