@@ -269,3 +269,56 @@ describe('OrderRepository.createCommande full rollback', () => {
     expect(mockTx.commande.create).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// D. Libération des œuvres (releaseOeuvres)
+// ---------------------------------------------------------------------------
+function buildReleaseRepository() {
+  const ligneCommande = {
+    findMany: vi.fn(),
+  };
+  const oeuvre = {
+    updateMany: vi.fn(),
+  };
+  const prisma = { ligneCommande, oeuvre };
+  const repository = new OrderRepository(prisma as any);
+  return { repository, prisma };
+}
+
+describe('OrderRepository.releaseOeuvres', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('releases VENDUE artworks back to PUBLIEE', async () => {
+    const { repository, prisma } = buildReleaseRepository();
+    prisma.ligneCommande.findMany.mockResolvedValue([
+      { oeuvreId: OEUVRE_1 },
+      { oeuvreId: OEUVRE_2 },
+    ]);
+    prisma.oeuvre.updateMany.mockResolvedValue({ count: 2 });
+
+    await repository.releaseOeuvres('cmd-1');
+
+    expect(prisma.ligneCommande.findMany).toHaveBeenCalledWith({
+      where: { commandeId: 'cmd-1' },
+      select: { oeuvreId: true },
+    });
+    expect(prisma.oeuvre.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: [OEUVRE_1, OEUVRE_2] },
+        statut: { in: ['EN_PANIER', 'VENDUE'] },
+      },
+      data: { statut: 'PUBLIEE' },
+    });
+  });
+
+  it('does nothing when the order has no lines', async () => {
+    const { repository, prisma } = buildReleaseRepository();
+    prisma.ligneCommande.findMany.mockResolvedValue([]);
+
+    await repository.releaseOeuvres('cmd-1');
+
+    expect(prisma.oeuvre.updateMany).not.toHaveBeenCalled();
+  });
+});

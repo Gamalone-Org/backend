@@ -1,5 +1,5 @@
 import { Prisma } from '../../generated/prisma/client.js';
-import { CategorieRepository, type ListCategoriesOptions } from './categorie.repository.js';
+import { CategorieRepository, type CategorieFilters, type ListCategoriesOptions } from './categorie.repository.js';
 import {
   ConflictError,
   NotFoundError,
@@ -16,6 +16,8 @@ import { uniqueSlug } from './slug.util.js';
 
 const IMAGE_DOMAIN = 'media' as const;
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+export const CSV_EXPORT_LIMIT = 5000;
 
 export class CategorieService {
   constructor(private readonly repository: CategorieRepository) {}
@@ -107,8 +109,64 @@ export class CategorieService {
     return categorie;
   }
 
-  listCategories(options: ListCategoriesOptions) {
-    return this.repository.listCategories(options);
+  async getPublicCategorie(id: string) {
+    const categorie = await this.repository.findCategorieById(id);
+    if (!categorie || categorie.statut !== 'ACTIVE') {
+      throw new NotFoundError('Catégorie non trouvée');
+    }
+    return categorie;
+  }
+
+  async listCategories(options: ListCategoriesOptions) {
+    const result = await this.repository.listCategories(options);
+    const totalPages = result.total === 0 ? 0 : Math.ceil(result.total / result.limit);
+    return { ...result, totalPages };
+  }
+
+  async listPublicCategories(options: { page: number; limit: number; q?: string }) {
+    return this.listCategories({ ...options, statut: 'ACTIVE' });
+  }
+
+  async listPublicSousCategories(categorieId: string) {
+    const categorie = await this.repository.findCategorieById(categorieId);
+    if (!categorie || categorie.statut !== 'ACTIVE') {
+      throw new NotFoundError('Catégorie non trouvée');
+    }
+    return this.repository.listSousCategoriesByCategorie(categorieId, 'ACTIVE');
+  }
+
+  async exportCsv(options: CategorieFilters) {
+    const categories = await this.repository.findForExport(options, CSV_EXPORT_LIMIT);
+
+    const header = [
+      'id',
+      'nom',
+      'description',
+      'slug',
+      'statut',
+      'position',
+      'nombre_oeuvres',
+      'imageCouvertureUrl',
+      'createdAt',
+    ];
+
+    const rows = categories.map((c) => [
+      c.id,
+      c.nom,
+      c.description,
+      c.slug,
+      c.statut,
+      c.position,
+      c._count.oeuvres,
+      c.imageCouvertureUrl ?? '',
+      new Date(c.createdAt).toISOString(),
+    ]);
+
+    const csv = [header, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    return csv;
   }
 
   async uploadCategorieImage(id: string, file: CloudinaryUploadInput, options: CloudinaryUploadOptions) {
@@ -162,13 +220,15 @@ export class CategorieService {
     });
   }
 
-  async updateSousCategorie(id: string, input: UpdateSousCategorieInput) {
-    await this.assertSousCategorieExists(id);
+  async updateSousCategorie(categorieId: string, id: string, input: UpdateSousCategorieInput) {
+    const existing = await this.repository.findSousCategorieById(id);
+    if (!existing || existing.categorieId !== categorieId) {
+      throw new NotFoundError('Sous-catégorie non trouvée');
+    }
     if (input.nom !== undefined) {
       const nom = input.nom.trim();
-      const current = await this.repository.findSousCategorieById(id);
       const slug = await uniqueSlug(nom, (s) => {
-        if (current && current.slug === s) return Promise.resolve(false);
+        if (existing.slug === s) return Promise.resolve(false);
         return this.repository.findSousCategorieBySlug(s).then((r) => r !== null);
       });
       try {
@@ -194,9 +254,9 @@ export class CategorieService {
     }
   }
 
-  async deleteSousCategorie(id: string) {
+  async deleteSousCategorie(categorieId: string, id: string) {
     const existing = await this.repository.findSousCategorieById(id);
-    if (!existing) {
+    if (!existing || existing.categorieId !== categorieId) {
       throw new NotFoundError('Sous-catégorie non trouvée');
     }
     try {
@@ -247,13 +307,6 @@ export class CategorieService {
     const existing = await this.repository.findCategorieById(id);
     if (!existing) {
       throw new NotFoundError('Catégorie non trouvée');
-    }
-  }
-
-  private async assertSousCategorieExists(id: string): Promise<void> {
-    const existing = await this.repository.findSousCategorieById(id);
-    if (!existing) {
-      throw new NotFoundError('Sous-catégorie non trouvée');
     }
   }
 

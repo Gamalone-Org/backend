@@ -81,6 +81,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
     }
     next();
   },
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 const app = (await import('../../src/app.js')).default;
@@ -98,7 +99,7 @@ describe('Dispute admin routes (Integration)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockList.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 });
-    mockGetOne.mockResolvedValue({ id: LITIGE_ID, motif: 'Œuvre non conforme', statut: 'OUVERT' });
+    mockGetOne.mockResolvedValue({ id: LITIGE_ID, motif: 'Å’uvre non conforme', statut: 'OUVERT' });
     mockExportCsv.mockResolvedValue(
       'id,motif,statut,createdAt,updatedAt,idCommande,dateCommande,statutCommande,montantCommande,clientNom,clientTelephone,artisanNomAtelier,artisanNom,artisanTelephone\n'
     );
@@ -126,7 +127,7 @@ describe('Dispute admin routes (Integration)', () => {
 
   it('SUPPORT is allowed to list disputes (200)', async () => {
     mockList.mockResolvedValue({
-      items: [{ id: LITIGE_ID, motif: 'Œuvre non conforme', statut: 'OUVERT' }],
+      items: [{ id: LITIGE_ID, motif: 'Å’uvre non conforme', statut: 'OUVERT' }],
       total: 1,
       page: 1,
       limit: 20,
@@ -139,7 +140,7 @@ describe('Dispute admin routes (Integration)', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.items).toEqual([{ id: LITIGE_ID, motif: 'Œuvre non conforme', statut: 'OUVERT' }]);
+    expect(res.body.items).toEqual([{ id: LITIGE_ID, motif: 'Å’uvre non conforme', statut: 'OUVERT' }]);
     expect(res.body.totalPages).toBe(1);
   });
 

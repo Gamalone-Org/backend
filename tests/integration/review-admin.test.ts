@@ -81,6 +81,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
     }
     next();
   },
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 const app = (await import('../../src/app.js')).default;
@@ -101,7 +102,7 @@ describe('Review admin routes (Integration)', () => {
     mockGetOne.mockResolvedValue({
       id: AVIS_ID,
       note: 5,
-      commentaire: 'Magnifique pièce',
+      commentaire: 'Magnifique piÃ¨ce',
       dateAvis: new Date('2026-09-02T08:00:00.000Z'),
       estVerifie: true,
     });

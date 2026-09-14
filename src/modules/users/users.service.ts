@@ -1,12 +1,12 @@
 import { AdminAccessLevel } from '../../generated/prisma/client.js';
-import { UserRepository, type ExportUsersOptions, type ListUsersOptions } from './users.repository.js';
+import {
+  UserRepository,
+  type ExportUsersOptions,
+  type ListUsersOptions,
+} from './users.repository.js';
 import { PasswordService } from '../auth/services/PasswordService.js';
 import { PhoneService } from '../auth/services/PhoneService.js';
-import {
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-} from '../../common/errors/AppError.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/AppError.js';
 import { hasMinAdminAccessLevel } from '../../config/kyc.js';
 import type {
   CreateUserInput,
@@ -53,9 +53,7 @@ export class UserService {
     const nom = input.nom?.trim() || null;
 
     if (input.role === 'ADMIN' && !this.isSuperAdmin(actor)) {
-      throw new ForbiddenError(
-        'Seul un SUPER_ADMIN peut créer un compte ADMIN'
-      );
+      throw new ForbiddenError('Seul un SUPER_ADMIN peut créer un compte ADMIN');
     }
 
     const existingByPhone = await this.repository.findByTelephone(telephone);
@@ -99,9 +97,16 @@ export class UserService {
       throw new ForbiddenError('Un administrateur ne peut pas modifier son propre statut');
     }
 
-    await this.requireExisting(id);
+    const result = await this.repository.updateStatutWithSuperAdminGuard(id, input.statut);
+    if (result === 0) {
+      throw new NotFoundError('Utilisateur non trouvé');
+    }
 
-    return this.repository.updateStatut(id, input.statut);
+    const user = await this.repository.findById(id);
+    if (!user) {
+      throw new NotFoundError('Utilisateur non trouvé');
+    }
+    return user;
   }
 
   async updateRole(actor: Actor, id: string, input: UpdateUserRoleInput) {
@@ -119,7 +124,7 @@ export class UserService {
     const targetRole = input.role;
     const currentAdminProfileExists = Boolean(target.adminProfile);
 
-    const updated = await this.repository.changeRole(
+    const updated = await this.repository.changeRoleWithSuperAdminGuard(
       id,
       targetRole,
       input.niveauAcces,
@@ -127,7 +132,8 @@ export class UserService {
     );
 
     return {
-      ...updated,
+      ...target,
+      role: updated.user.role,
       adminProfile: targetRole === 'ADMIN' ? updated.adminProfile : null,
     };
   }
@@ -207,16 +213,6 @@ export class UserService {
   }
 
   private isSuperAdmin(actor: Actor): boolean {
-    return (
-      actor.role === 'ADMIN' &&
-      hasMinAdminAccessLevel(actor.adminAccessLevel, 'SUPER_ADMIN')
-    );
-  }
-
-  private async requireExisting(id: string): Promise<void> {
-    const user = await this.repository.findById(id);
-    if (!user) {
-      throw new NotFoundError('Utilisateur non trouvé');
-    }
+    return actor.role === 'ADMIN' && hasMinAdminAccessLevel(actor.adminAccessLevel, 'SUPER_ADMIN');
   }
 }

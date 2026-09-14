@@ -82,6 +82,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
     }
     next();
   },
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 const app = (await import('../../src/app.js')).default;
@@ -192,7 +193,7 @@ describe('Routes admin UTILISATEURS - permissions (Integration)', () => {
     expect(mockExport).toHaveBeenCalled();
   });
 
-  // ---- NIVEAUX : écriture restreinte ----
+  // ---- NIVEAUX : Ã©criture restreinte ----
 
   it('forbids SUPPORT from creating a user (403)', async () => {
     const res = await request(app)
@@ -307,7 +308,7 @@ describe('Routes admin UTILISATEURS - permissions (Integration)', () => {
   // ---- ERREURS ----
 
   it('propagates a NotFoundError when the user does not exist (404)', async () => {
-    mockGetOne.mockRejectedValue(new NotFoundError('Utilisateur non trouvé'));
+    mockGetOne.mockRejectedValue(new NotFoundError('Utilisateur non trouvÃ©'));
     const res = await request(app)
       .get(`/api/v1/admin/users/${USER_ID}`)
       .set(authHeaders('SUPPORT'));

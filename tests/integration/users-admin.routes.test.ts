@@ -45,6 +45,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
   },
   requireRole: () => (_req: any, _res: any, next: any) => next(),
   requireAdminLevel: () => (_req: any, _res: any, next: any) => next(),
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 vi.mock('../../src/modules/kyc/kyc.factory.js', () => ({
@@ -96,7 +97,7 @@ describe('Routes admin UTILISATEURS', () => {
     expect(mockList).toHaveBeenCalled();
   });
 
-  it('GET /api/v1/admin/users propage les filtres de la requête', async () => {
+  it('GET /api/v1/admin/users propage les filtres de la requÃªte', async () => {
     await request(app).get('/api/v1/admin/users?role=ACHETEUR&statut=SUSPENDU&bloques=true&q=awa');
     expect(mockList).toHaveBeenCalledWith(
       expect.anything(),
@@ -110,19 +111,19 @@ describe('Routes admin UTILISATEURS', () => {
     expect(mockList).not.toHaveBeenCalled();
   });
 
-  it('GET /api/v1/admin/users/:id retourne le détail', async () => {
+  it('GET /api/v1/admin/users/:id retourne le dÃ©tail', async () => {
     const res = await request(app).get(`/api/v1/admin/users/${USER_ID}`);
     expect(res.status).toBe(200);
     expect(mockGetOne).toHaveBeenCalledWith(expect.anything(), USER_ID);
   });
 
   it('GET /api/v1/admin/users/:id retourne 404 si absent', async () => {
-    mockGetOne.mockRejectedValueOnce(new NotFoundError('Utilisateur non trouvé'));
+    mockGetOne.mockRejectedValueOnce(new NotFoundError('Utilisateur non trouvÃ©'));
     const res = await request(app).get(`/api/v1/admin/users/${USER_ID}`);
     expect(res.status).toBe(404);
   });
 
-  it('POST /api/v1/admin/users crée un utilisateur', async () => {
+  it('POST /api/v1/admin/users crÃ©e un utilisateur', async () => {
     const res = await request(app).post('/api/v1/admin/users').send({
       role: 'ACHETEUR',
       telephone: '+22890123456',
@@ -139,8 +140,8 @@ describe('Routes admin UTILISATEURS', () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
-  it('POST /api/v1/admin/users retourne 409 sur conflit téléphone', async () => {
-    mockCreate.mockRejectedValueOnce(new ConflictError('Un compte avec ce numéro de téléphone existe déjà'));
+  it('POST /api/v1/admin/users retourne 409 sur conflit tÃ©lÃ©phone', async () => {
+    mockCreate.mockRejectedValueOnce(new ConflictError('Un compte avec ce numÃ©ro de tÃ©lÃ©phone existe dÃ©jÃ '));
     const res = await request(app).post('/api/v1/admin/users').send({
       role: 'ACHETEUR',
       telephone: '+22890123456',
@@ -167,7 +168,7 @@ describe('Routes admin UTILISATEURS', () => {
     expect(res.status).toBe(403);
   });
 
-  it('PATCH /api/v1/admin/users/:id/role change le rôle (SUPER_ADMIN côté service)', async () => {
+  it('PATCH /api/v1/admin/users/:id/role change le rÃ´le (SUPER_ADMIN cÃ´tÃ© service)', async () => {
     const res = await request(app)
       .patch(`/api/v1/admin/users/${USER_ID}/role`)
       .send({ role: 'ADMIN', niveauAcces: 'SUPPORT' });

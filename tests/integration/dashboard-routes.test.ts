@@ -85,6 +85,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
     }
     next();
   },
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 const app = (await import('../../src/app.js')).default;
@@ -155,7 +156,7 @@ describe('Admin dashboard routes (Integration)', () => {
     expect(mockGetDashboard).not.toHaveBeenCalled();
   });
 
-  it('refuse un rôle ADMIN sans niveau d’accès (403)', async () => {
+  it('refuse un rÃ´le ADMIN sans niveau dâ€™accÃ¨s (403)', async () => {
     const res = await request(app)
       .get('/api/v1/admin/dashboard')
       .set('Authorization', 'Bearer token')
@@ -187,7 +188,7 @@ describe('Admin dashboard routes (Integration)', () => {
     expect(mockGetDashboard).not.toHaveBeenCalled();
   });
 
-  it('autorise un SUPER_ADMIN (200) avec la période par défaut 30d', async () => {
+  it('autorise un SUPER_ADMIN (200) avec la pÃ©riode par dÃ©faut 30d', async () => {
     const res = await request(app)
       .get('/api/v1/admin/dashboard')
       .set('Authorization', 'Bearer token')
@@ -200,7 +201,7 @@ describe('Admin dashboard routes (Integration)', () => {
     expect(res.body.period.key).toBe('30d');
   });
 
-  it('passe la période demandée au service', async () => {
+  it('passe la pÃ©riode demandÃ©e au service', async () => {
     await request(app)
       .get('/api/v1/admin/dashboard?period=7d')
       .set('Authorization', 'Bearer token')
@@ -210,7 +211,7 @@ describe('Admin dashboard routes (Integration)', () => {
     expect(mockGetDashboard).toHaveBeenCalledWith('7d');
   });
 
-  it('autorise toutes les périodes valides (90d, 12m)', async () => {
+  it('autorise toutes les pÃ©riodes valides (90d, 12m)', async () => {
     for (const period of ['90d', '12m']) {
       const res = await request(app)
         .get(`/api/v1/admin/dashboard?period=${period}`)
@@ -223,7 +224,7 @@ describe('Admin dashboard routes (Integration)', () => {
     }
   });
 
-  it('rejette une période invalide (400)', async () => {
+  it('rejette une pÃ©riode invalide (400)', async () => {
     const res = await request(app)
       .get('/api/v1/admin/dashboard?period=annuel')
       .set('Authorization', 'Bearer token')
@@ -234,7 +235,7 @@ describe('Admin dashboard routes (Integration)', () => {
     expect(mockGetDashboard).not.toHaveBeenCalled();
   });
 
-  it('renvoie succès + payload du service sous une clé success', async () => {
+  it('renvoie succÃ¨s + payload du service sous une clÃ© success', async () => {
     const res = await request(app)
       .get('/api/v1/admin/dashboard')
       .set('Authorization', 'Bearer token')

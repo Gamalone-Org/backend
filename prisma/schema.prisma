@@ -55,6 +55,60 @@ enum AdminAccessLevel {
   SUPER_ADMIN
 }
 
+// ---------------------------------------------------------------------------
+// Permissions granulaires des administrateurs.
+// SUPPORT / MODERATEUR = ADMIN "simple" : accès conditionné aux permissions
+// attribuées. SUPER_ADMIN = accès implicite total (OPTION A : le SUPER_ADMIN
+// ne stocke pas de permissions, il les possède toutes par nature).
+// ---------------------------------------------------------------------------
+
+enum AdminPermission {
+  ADMINS_READ
+  ADMINS_CREATE
+  ADMINS_UPDATE
+  ADMINS_MANAGE
+  USERS_READ
+  USERS_UPDATE
+  ARTISANS_READ
+  ARTISANS_UPDATE
+  KYC_READ
+  KYC_REVIEW
+  KYC_VALIDATE
+  ARTWORKS_READ
+  ARTWORKS_CREATE
+  ARTWORKS_UPDATE
+  ARTWORKS_DELETE
+  ARTWORKS_PUBLISH
+  CATEGORIES_READ
+  CATEGORIES_MANAGE
+  ORDERS_READ
+  ORDERS_UPDATE
+  DISPUTES_READ
+  DISPUTES_MANAGE
+  ARTICLES_READ
+  ARTICLES_CREATE
+  ARTICLES_UPDATE
+  ARTICLES_DELETE
+  ARTICLES_PUBLISH
+  DELIVERIES_READ
+  DELIVERIES_UPDATE
+  REVIEWS_READ
+  DASHBOARD_READ
+}
+
+// ---------------------------------------------------------------------------
+// Actions sensibles d'administration tracées (audit minimal, hors champ RGPD
+// des données métier : on ne log que des références + du Json non sensible).
+// ---------------------------------------------------------------------------
+
+enum AdminAuditAction {
+  CREATE_ADMIN
+  UPDATE_ADMIN
+  UPDATE_ADMIN_PERMISSIONS
+  ACTIVATE_ADMIN
+  DEACTIVATE_ADMIN
+}
+
 enum BuyerType {
   PARTICULIER
   PROFESSIONNEL
@@ -162,6 +216,22 @@ enum DeliveryStatus {
   ECHEC
 }
 
+enum ArtisanDevise {
+  XOF
+  EUR
+  USD
+}
+
+enum ArtisanLangue {
+  fr
+  en
+}
+
+enum ArtisanPaiementMethode {
+  MOBILE_MONEY
+  VIREMENT_BANCAIRE
+}
+
 // ---------------------------------------------------------------------------
 // Utilisateur (base) + profils métier (remplace l'héritage UML)
 // ---------------------------------------------------------------------------
@@ -213,6 +283,35 @@ model ArtisanProfile {
   photoAtelierPublicId String?
   photoAtelierMimeType String?
   photoAtelierSize    Int?
+
+  // --- Photo de profil artisan ---
+  photoProfilUrl        String?
+  photoProfilPublicId   String?
+  photoProfilMimeType   String?
+  photoProfilSize       Int?
+
+  // --- Bannière atelier ---
+  photoBanniereUrl        String?
+  photoBannierePublicId   String?
+  photoBanniereMimeType   String?
+  photoBanniereSize       Int?
+
+  // --- Informations étendues ---
+  anneeCreation       Int?
+  ville               String?
+  pays                String?
+
+  // --- Présentation ---
+  bioCourte           String?             @db.VarChar(500)
+  histoire            String?             @db.Text
+  siteWeb             String?
+
+  // --- Paramètres boutique ---
+  devise              ArtisanDevise       @default(XOF)
+  langue              ArtisanLangue       @default(fr)
+  preparationMinDays  Int?
+  preparationMaxDays  Int?
+
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
@@ -222,6 +321,11 @@ model ArtisanProfile {
   lignesCommande   LigneCommande[]
   commandesArtisans CommandeArtisan[]
   litiges          Litige[]
+  atelierPhotos    ArtisanAtelierPhoto[]
+  processusEtapes  CreationProcessus[]
+  expositions      Exposition[]
+  boutiqueSetting  BoutiqueSetting?
+  paiementPreference ArtisanPaymentPreference?
 
   @@index([validatedByAdminId])
   @@map("artisan_profiles")
@@ -242,8 +346,54 @@ model AdminProfile {
   reviewHistories   KycReviewHistory[] @relation("AdminKycReviewHistory")
   articles          Article[]          @relation("ArticlePublication")
   authoredArticles  Article[]          @relation("ArticleAuthor")
+  permissions       AdminProfilePermission[]
+  auditLogsAsActor  AdminAuditLog[]     @relation("AdminAuditActor")
+  auditLogsAsTarget AdminAuditLog[]     @relation("AdminAuditTarget")
 
   @@map("admin_profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Permissions d'un profil administrateur (many-to-many implicite : un ADMIN
+// possède N permissions, données par le SUPER_ADMIN). La clé composite
+// garantit l'absence de doublon pour un même profil.
+// ---------------------------------------------------------------------------
+
+model AdminProfilePermission {
+  adminProfileId String         @db.Uuid
+  permission     AdminPermission
+  createdAt      DateTime       @default(now())
+
+  adminProfile AdminProfile @relation(fields: [adminProfileId], references: [id], onDelete: Cascade)
+
+  @@id([adminProfileId, permission])
+  @@index([permission])
+  @@map("admin_profile_permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Audit minimal des actions d'administration sensibles (création, modification,
+// attributions, activation/désactivation). Les référentiels de permission
+// (`AdminPermission`) et de niveau sont stockés en texte/Json, jamais les
+// mots de passe ni les données sensibles des utilisateurs.
+// ---------------------------------------------------------------------------
+
+model AdminAuditLog {
+  id            String           @id @default(uuid()) @db.Uuid
+  action        AdminAuditAction
+  actorAdminId  String?          @db.Uuid
+  targetAdminId String?          @db.Uuid
+  details       Json?            @db.JsonB
+  createdAt     DateTime         @default(now())
+
+  actorAdmin  AdminProfile? @relation("AdminAuditActor", fields: [actorAdminId], references: [id], onDelete: SetNull)
+  targetAdmin AdminProfile? @relation("AdminAuditTarget", fields: [targetAdminId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([actorAdminId])
+  @@index([targetAdminId])
+  @@index([createdAt])
+  @@map("admin_audit_logs")
 }
 
 model BuyerProfile {
@@ -258,8 +408,32 @@ model BuyerProfile {
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   commandes Commande[]
+  favoris    Favori[]
 
   @@map("buyer_profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Favoris acheteur (Espace Acheteur → Mes favoris).
+// Un acheteur ne peut mettre une même œuvre en favori qu'une seule fois.
+// La contrainte unique composite (acheteurId, oeuvreId) est la protection
+// finale contre les doublons (y compris en cas de concurrence).
+// ---------------------------------------------------------------------------
+
+model Favori {
+  id           String   @id @default(uuid()) @db.Uuid
+  acheteurId   String   @db.Uuid
+  oeuvreId     String   @db.Uuid
+  dateCreation DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  acheteur BuyerProfile @relation(fields: [acheteurId], references: [id], onDelete: Cascade)
+  oeuvre   Oeuvre       @relation(fields: [oeuvreId], references: [id], onDelete: Cascade)
+
+  @@unique([acheteurId, oeuvreId])
+  @@index([acheteurId, dateCreation])
+  @@map("favoris")
 }
 
 model OtpCode {
@@ -460,6 +634,7 @@ model Oeuvre {
   medias           Media[]
   certificat       Certificat?
   lignesCommande   LigneCommande[]
+  favoris          Favori[]
 
   @@index([artisanId])
   @@index([categorieId])
@@ -689,4 +864,93 @@ model Litige {
   @@index([artisanId])
   @@index([statut])
   @@map("litiges")
+}
+
+// ---------------------------------------------------------------------------
+// Profil Artisan — Photos atelier, Processus, Expositions, Boutique, Paiement
+// ---------------------------------------------------------------------------
+
+model ArtisanAtelierPhoto {
+  id              String   @id @default(uuid()) @db.Uuid
+  artisanId       String   @db.Uuid
+  url             String
+  publicId        String
+  mimeType        String
+  size            Int
+  ordre           Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+
+  @@index([artisanId])
+  @@index([artisanId, ordre])
+  @@map("artisan_atelier_photos")
+}
+
+model CreationProcessus {
+  id              String   @id @default(uuid()) @db.Uuid
+  artisanId       String   @db.Uuid
+  ordre           Int
+  photoUrl        String?
+  photoPublicId   String?
+  photoMimeType   String?
+  photoSize       Int?
+  legende         String   @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+
+  @@unique([artisanId, ordre])
+  @@index([artisanId])
+  @@map("creation_processus")
+}
+
+model Exposition {
+  id              String   @id @default(uuid()) @db.Uuid
+  artisanId       String   @db.Uuid
+  annee           Int
+  evenement       String
+  lieu            String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+
+  @@index([artisanId])
+  @@index([artisanId, annee])
+  @@map("expositions")
+}
+
+model BoutiqueSetting {
+  id                  String        @id @default(uuid()) @db.Uuid
+  artisanId           String        @unique @db.Uuid
+  devise              ArtisanDevise @default(XOF)
+  langue              ArtisanLangue @default(fr)
+  preparationMinDays  Int?
+  preparationMaxDays  Int?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+
+  @@map("boutique_settings")
+}
+
+model ArtisanPaymentPreference {
+  id                    String               @id @default(uuid()) @db.Uuid
+  artisanId             String               @unique @db.Uuid
+  methode               ArtisanPaiementMethode
+  mobileMoneyOperateur  String?
+  mobileMoneyNumero     String?
+  virementNomBanque     String?
+  virementIban          String?
+  virementNomCompte     String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  artisan ArtisanProfile @relation(fields: [artisanId], references: [id], onDelete: Cascade)
+
+  @@map("artisan_payment_preferences")
 }

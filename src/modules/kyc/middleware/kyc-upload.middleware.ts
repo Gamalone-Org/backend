@@ -31,7 +31,7 @@ export const kycUploadMiddleware = (req: Request, res: Response, next: NextFunct
 
 /**
  * Validates the true content type using magic bytes
- * Supports PDF, JPEG, and PNG signatures.
+ * Supports PDF, JPEG, PNG, and WEBP signatures.
  */
 export function detectMimeTypeFromMagicBytes(buffer: Buffer): string | null {
   if (!buffer || buffer.length < 4) {
@@ -68,6 +68,21 @@ export function detectMimeTypeFromMagicBytes(buffer: Buffer): string | null {
     buffer[7] === 0x0a
   ) {
     return 'image/png';
+  }
+
+  // WEBP signature: 'RIFF' (0-3) ... 'WEBP' (8-11)
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer[8] === 0x57 &&
+    buffer[9] === 0x45 &&
+    buffer[10] === 0x42 &&
+    buffer[11] === 0x50
+  ) {
+    return 'image/webp';
   }
 
   return null;

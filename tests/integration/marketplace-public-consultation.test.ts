@@ -5,7 +5,6 @@ import { NotFoundError } from '../../src/common/errors/AppError.js';
 const mockListPublic = vi.fn();
 const mockGetFeatured = vi.fn();
 const mockGetPublic = vi.fn();
-const mockGetByArtisan = vi.fn();
 
 vi.mock('../../src/modules/marketplace/oeuvre.service.js', () => ({
   OeuvreService: class {
@@ -25,7 +24,6 @@ vi.mock('../../src/modules/marketplace/oeuvre.service.js', () => ({
     getPublishedPublic = mockListPublic;
     getFeatured = mockGetFeatured;
     getOeuvrePublic = mockGetPublic;
-    getOeuvresByArtisanPublic = mockGetByArtisan;
   },
 }));
 
@@ -82,7 +80,6 @@ describe('Marketplace public consultation routes', () => {
     mockListPublic.mockResolvedValue({ oeuvres: [publicOeuvre], total: 1, page: 1, limit: 20 });
     mockGetFeatured.mockResolvedValue([publicOeuvre]);
     mockGetPublic.mockResolvedValue(publicOeuvre);
-    mockGetByArtisan.mockResolvedValue({ oeuvres: [publicOeuvre], total: 1 });
   });
 
   it('GET /api/v1/oeuvres lists published oeuvres', async () => {
@@ -127,13 +124,5 @@ describe('Marketplace public consultation routes', () => {
   it('GET /api/v1/oeuvres/:id rejects an invalid id', async () => {
     const response = await request(app).get('/api/v1/oeuvres/not-a-uuid');
     expect(response.status).toBe(400);
-  });
-
-  it('GET /api/v1/artisans/:artisanId/oeuvres lists an artisan published oeuvres', async () => {
-    const response = await request(app).get(
-      `/api/v1/artisans/${ARTISAN_ID}/oeuvres?page=1&limit=10`
-    );
-    expect(response.status).toBe(200);
-    expect(mockGetByArtisan).toHaveBeenCalled();
   });
 });

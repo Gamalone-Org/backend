@@ -50,6 +50,8 @@ function buildService(overrides: Partial<UserRepository> = {}) {
     updateStatut: vi.fn(),
     updateRole: vi.fn(),
     changeRole: vi.fn(),
+    updateStatutWithSuperAdminGuard: vi.fn(),
+    changeRoleWithSuperAdminGuard: vi.fn(),
     listUsers: vi.fn(),
     exportUsers: vi.fn(),
     findForExport: vi.fn(),
@@ -81,9 +83,7 @@ describe('UserService - RBAC & anti-escalation', () => {
     it('retourne 404 si l’utilisateur n’existe pas (détail)', async () => {
       const { service, repository } = buildService();
       repository.findById.mockResolvedValue(null);
-      await expect(service.getById(ACTOR_SUPPORT, TARGET_ID)).rejects.toBeInstanceOf(
-        NotFoundError
-      );
+      await expect(service.getById(ACTOR_SUPPORT, TARGET_ID)).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it('retourne l’utilisateur avec ses profils (détail)', async () => {
@@ -149,19 +149,20 @@ describe('UserService - RBAC & anti-escalation', () => {
     it('signale un conflit téléphone existant', async () => {
       const { service, repository } = buildService();
       repository.findByTelephone.mockResolvedValue(makeUser());
-      await expect(service.createUser(ACTOR_MODERATEUR, baseInput)).rejects.toThrow(
-        'existe déjà'
-      );
+      await expect(service.createUser(ACTOR_MODERATEUR, baseInput)).rejects.toThrow('existe déjà');
     });
   });
 
   describe('updateStatut', () => {
     it('autorise le changement pour MODERATEUR', async () => {
       const { service, repository } = buildService();
-      repository.findById.mockResolvedValue(makeUser());
-      repository.updateStatut.mockResolvedValue(makeUser({ statut: 'SUSPENDU' }));
+      repository.updateStatutWithSuperAdminGuard.mockResolvedValue(1);
+      repository.findById.mockResolvedValue(makeUser({ statut: 'SUSPENDU' }));
       await service.updateStatut(ACTOR_MODERATEUR, TARGET_ID, { statut: 'SUSPENDU' });
-      expect(repository.updateStatut).toHaveBeenCalledWith(TARGET_ID, 'SUSPENDU');
+      expect(repository.updateStatutWithSuperAdminGuard).toHaveBeenCalledWith(
+        TARGET_ID,
+        'SUSPENDU'
+      );
     });
 
     it('refuse pour SUPPORT', async () => {
@@ -169,7 +170,7 @@ describe('UserService - RBAC & anti-escalation', () => {
       await expect(
         service.updateStatut(ACTOR_SUPPORT, TARGET_ID, { statut: 'SUSPENDU' })
       ).rejects.toBeInstanceOf(ForbiddenError);
-      expect(repository.updateStatut).not.toHaveBeenCalled();
+      expect(repository.updateStatutWithSuperAdminGuard).not.toHaveBeenCalled();
     });
 
     it('interdit l’auto-modification de son propre statut', async () => {
@@ -177,12 +178,12 @@ describe('UserService - RBAC & anti-escalation', () => {
       await expect(
         service.updateStatut(ACTOR_MODERATEUR, ACTOR_MODERATEUR.id, { statut: 'SUSPENDU' })
       ).rejects.toBeInstanceOf(ForbiddenError);
-      expect(repository.updateStatut).not.toHaveBeenCalled();
+      expect(repository.updateStatutWithSuperAdminGuard).not.toHaveBeenCalled();
     });
 
     it('retourne 404 si l’utilisateur cible n’existe pas', async () => {
       const { service, repository } = buildService();
-      repository.findById.mockResolvedValue(null);
+      repository.updateStatutWithSuperAdminGuard.mockResolvedValue(0);
       await expect(
         service.updateStatut(ACTOR_MODERATEUR, TARGET_ID, { statut: 'SUSPENDU' })
       ).rejects.toBeInstanceOf(NotFoundError);
@@ -194,13 +195,13 @@ describe('UserService - RBAC & anti-escalation', () => {
 
     it('requiert SUPER_ADMIN', async () => {
       const { service, repository } = buildService();
-      await expect(service.updateRole(ACTOR_MODERATEUR, TARGET_ID, roleInput)).rejects.toBeInstanceOf(
-        ForbiddenError
-      );
+      await expect(
+        service.updateRole(ACTOR_MODERATEUR, TARGET_ID, roleInput)
+      ).rejects.toBeInstanceOf(ForbiddenError);
       await expect(service.updateRole(ACTOR_SUPPORT, TARGET_ID, roleInput)).rejects.toBeInstanceOf(
         ForbiddenError
       );
-      expect(repository.changeRole).not.toHaveBeenCalled();
+      expect(repository.changeRoleWithSuperAdminGuard).not.toHaveBeenCalled();
     });
 
     it('interdit la modification de son propre rôle', async () => {
@@ -208,17 +209,18 @@ describe('UserService - RBAC & anti-escalation', () => {
       await expect(
         service.updateRole(ACTOR_SUPER, ACTOR_SUPER.id, roleInput)
       ).rejects.toBeInstanceOf(ForbiddenError);
-      expect(repository.changeRole).not.toHaveBeenCalled();
+      expect(repository.changeRoleWithSuperAdminGuard).not.toHaveBeenCalled();
     });
 
     it('crée un AdminProfile quand la cible devient ADMIN', async () => {
       const { service, repository } = buildService();
       repository.findById.mockResolvedValue(makeUser());
-      repository.changeRole.mockResolvedValue(
-        makeUser({ role: 'ADMIN', adminProfile: { id: 'a', niveauAcces: 'SUPPORT' } })
-      );
+      repository.changeRoleWithSuperAdminGuard.mockResolvedValue({
+        user: { id: TARGET_ID, role: 'ADMIN' },
+        adminProfile: { id: 'a', niveauAcces: 'SUPPORT' },
+      });
       const result = await service.updateRole(ACTOR_SUPER, TARGET_ID, roleInput);
-      expect(repository.changeRole).toHaveBeenCalledWith(
+      expect(repository.changeRoleWithSuperAdminGuard).toHaveBeenCalledWith(
         TARGET_ID,
         'ADMIN',
         'SUPPORT',
@@ -235,7 +237,10 @@ describe('UserService - RBAC & anti-escalation', () => {
         adminProfile: { id: 'a', niveauAcces: 'SUPPORT' },
       });
       repository.findById.mockResolvedValue(adminUser);
-      repository.changeRole.mockResolvedValue(makeUser({ role: 'ACHETEUR', adminProfile: null }));
+      repository.changeRoleWithSuperAdminGuard.mockResolvedValue({
+        user: { id: TARGET_ID, role: 'ACHETEUR' },
+        adminProfile: null,
+      });
       const result = await service.updateRole(ACTOR_SUPER, TARGET_ID, {
         role: 'ACHETEUR',
       });
@@ -248,7 +253,7 @@ describe('UserService - RBAC & anti-escalation', () => {
       await expect(service.updateRole(ACTOR_SUPER, TARGET_ID, roleInput)).rejects.toBeInstanceOf(
         NotFoundError
       );
-      expect(repository.changeRole).not.toHaveBeenCalled();
+      expect(repository.changeRoleWithSuperAdminGuard).not.toHaveBeenCalled();
     });
   });
 
@@ -277,9 +282,7 @@ describe('UserService - RBAC & anti-escalation', () => {
         { q: 'awa', bloques: true },
         CSV_EXPORT_LIMIT
       );
-      expect(csv).toContain(
-        'id,nom,email,telephone,role,statut,inscription,niveau_admin,profil'
-      );
+      expect(csv).toContain('id,nom,email,telephone,role,statut,inscription,niveau_admin,profil');
       expect(csv).toContain('ACHETEUR');
       expect(csv).toContain('+22890123456');
     });

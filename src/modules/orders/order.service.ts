@@ -1,5 +1,6 @@
 import { OrderStatus, type PaymentMethod } from '../../generated/prisma/client.js';
 import { OrderRepository, type CommandeArtisanData } from './order.repository.js';
+import type { AcheteurCommandeFilters } from './order.types.js';
 import {
   NotFoundError,
   ForbiddenError,
@@ -22,6 +23,17 @@ const ANNULEE_ORIGINES: OrderStatus[] = [
   'PREPARATION',
   'EXPEDIEE',
 ];
+
+// Transitions autorisées pour l'artisan sur SA CommandeArtisan.
+const ARTISAN_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  COMMANDE: ['PREPARATION'],
+  PREPARATION: ['EXPEDIEE'],
+  EXPEDIEE: [],
+  LIVREE: [],
+  CLOTUREE: [],
+  ANNULEE: [],
+  REMBOURSEE: [],
+};
 
 export class OrderService {
   constructor(private readonly repository: OrderRepository) {}
@@ -189,7 +201,12 @@ export class OrderService {
     };
   }
 
-  async getMyCommandes(userId: string, page: number, limit: number) {
+  async getMyCommandes(
+    userId: string,
+    page: number,
+    limit: number,
+    filters: AcheteurCommandeFilters = {}
+  ) {
     const buyerProfile = await this.repository.findBuyerProfileByUserId(userId);
     if (!buyerProfile) {
       throw new ForbiddenError('Profil acheteur introuvable');
@@ -197,7 +214,8 @@ export class OrderService {
     const { commandes, total } = await this.repository.findForAcheteur(
       buyerProfile.id,
       page,
-      limit
+      limit,
+      filters
     );
     return { commandes, total, page, limit };
   }
@@ -212,6 +230,103 @@ export class OrderService {
       throw new NotFoundError('Commande introuvable');
     }
     return commande;
+  }
+
+  async resolveArtisanId(userId: string) {
+    const profile = await this.repository.findArtisanProfileByUserId(userId);
+    if (!profile) {
+      throw new ForbiddenError('Profil artisan non trouvé');
+    }
+    return profile.id;
+  }
+
+  /**
+   * Résout le profil artisan et vérifie son éligibilité à l'écriture
+   * (préparer / expédier) : le compte doit être ACTIF et son KYC validé.
+   * La consultation (liste / détail) reste ouverte aux artisans en cours
+   * de validation pour ne pas bloquer l'onboarding.
+   */
+  private async resolveArtisanEligibility(userId: string) {
+    const profile = await this.repository.findArtisanEligibility(userId);
+    if (!profile) {
+      throw new ForbiddenError('Profil artisan non trouvé');
+    }
+    if (profile.user.statut !== 'ACTIF') {
+      throw new ForbiddenError(
+        "Le profil artisan doit être ACTIF pour préparer ou expédier ses commandes"
+      );
+    }
+    const validKyc = await this.repository.findKycValidForUser(userId);
+    if (!validKyc) {
+      throw new ForbiddenError(
+        "Le KYC de l'artisan doit être validé pour préparer ou expédier ses commandes"
+      );
+    }
+    return profile.id;
+  }
+
+  async getMyCommandesArtisan(
+    userId: string,
+    page: number,
+    limit: number,
+    filters: { statut?: OrderStatus; q?: string }
+  ) {
+    const artisanId = await this.resolveArtisanId(userId);
+    const [result, counts] = await Promise.all([
+      this.repository.findAllForArtisan(artisanId, page, limit, filters),
+      this.repository.getArtisanOrderCounts(artisanId),
+    ]);
+    return { ...result, page, limit, counts };
+  }
+
+  async getMyCommandeArtisan(userId: string, commandeArtisanId: string) {
+    const artisanId = await this.resolveArtisanId(userId);
+    const commandeArtisan = await this.repository.findOneForArtisan(
+      commandeArtisanId,
+      artisanId
+    );
+    if (!commandeArtisan) {
+      throw new NotFoundError('Commande introuvable');
+    }
+    return commandeArtisan;
+  }
+
+  private async runArtisanTransition(userId: string, id: string, target: OrderStatus) {
+    const artisanId = await this.resolveArtisanEligibility(userId);
+    const summary = await this.repository.findArtisanCommandSummary(id, artisanId);
+    if (!summary) {
+      throw new NotFoundError('Commande introuvable');
+    }
+
+    const allowed = ARTISAN_TRANSITIONS[summary.statut];
+    if (!allowed.includes(target)) {
+      throw new ConflictError(
+        `Transition de statut invalide : ${summary.statut} → ${target}`
+      );
+    }
+
+    const result = await this.repository.advanceArtisanCommand(
+      id,
+      artisanId,
+      summary.statut,
+      target
+    );
+    if (!result) {
+      throw new ConflictError(
+        'Concurrence détectée : la commande a été modifiée, veuillez réessayer'
+      );
+    }
+
+    const commandeArtisan = await this.repository.findOneForArtisan(id, artisanId);
+    return { commandeArtisan, statutGlobal: result.statutGlobal };
+  }
+
+  async preparer(userId: string, commandeArtisanId: string) {
+    return this.runArtisanTransition(userId, commandeArtisanId, 'PREPARATION');
+  }
+
+  async expedier(userId: string, commandeArtisanId: string) {
+    return this.runArtisanTransition(userId, commandeArtisanId, 'EXPEDIEE');
   }
 
   async getAllAdmin(page: number, limit: number, filters: { statut?: OrderStatus; q?: string }) {
@@ -259,7 +374,13 @@ export class OrderService {
       );
     }
 
-    return this.repository.updateStatut(commandeId, 'ANNULEE');
+    const commandeMaj = await this.repository.updateStatut(commandeId, 'ANNULEE');
+
+    // Libère les œuvres liées à la commande pour qu'elles redeviennent
+    // disponibles (VENDUE ou EN_PANIER → PUBLIEE).
+    await this.repository.releaseOeuvres(commandeId);
+
+    return commandeMaj;
   }
 
   async exportCsv(filters: { statut?: OrderStatus; q?: string }) {

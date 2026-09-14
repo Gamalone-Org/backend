@@ -129,9 +129,7 @@ export class UserRepository {
   }
 
   isUniqueConstraintError(error: unknown): boolean {
-    return (
-      error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
-    );
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
   }
 
   async createUser(data: CreateUserData) {
@@ -270,6 +268,159 @@ export class UserRepository {
     return this.prisma.adminProfile.update({
       where: { userId },
       data: { niveauAcces },
+    });
+  }
+
+  async countActiveSuperAdmins(): Promise<number> {
+    return this.prisma.user.count({
+      where: {
+        role: 'ADMIN',
+        statut: 'ACTIF',
+        adminProfile: { is: { niveauAcces: 'SUPER_ADMIN' } },
+      },
+    });
+  }
+
+  /**
+   * Désactivation / suspension atomique du dernier SUPER_ADMIN.
+   *
+   * Utilise SELECT ... FOR UPDATE sur les profils SUPER_ADMIN actifs pour
+   * verrouiller les lignes et empêcher la race condition TOCTOU quand deux
+   * requêtes tentent simultanément de désactiver deux SUPER_ADMIN distincts
+   * alors qu'il n'en reste que deux.
+   *
+   * @returns le nombre de lignes mises à jour (0 = cible introuvable)
+   * @throws NotFoundError si l'utilisateur n'existe pas
+   * @throws ConflictError si on tente de désactiver le dernier SUPER_ADMIN
+   */
+  async updateStatutWithSuperAdminGuard(id: string, statut: UserStatus): Promise<number> {
+    const { ConflictError, NotFoundError } = await import('../../common/errors/AppError.js');
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Verrouiller toutes les lignes SUPER_ADMIN actifs. La requête
+      //    SELECT ... FOR UPDATE empêche toute modification concurrente
+      //    pendant que nous vérifions le compteur et appliquons la mise à jour.
+      await tx.$queryRaw`
+        SELECT 1 FROM "users" "u"
+        INNER JOIN "admin_profiles" "ap" ON "ap"."userId" = "u"."id"
+        WHERE "u"."role" = 'ADMIN'
+          AND "u"."statut" = 'ACTIF'
+          AND "ap"."niveauAcces" = 'SUPER_ADMIN'
+        FOR UPDATE
+      `;
+
+      // 2. Vérifier que la cible existe et si elle est un SUPER_ADMIN actif.
+      const target = await tx.user.findUnique({
+        where: { id },
+        include: { adminProfile: true },
+      });
+      if (!target) {
+        throw new NotFoundError('Utilisateur non trouvé');
+      }
+
+      const deactivating =
+        target.role === 'ADMIN' &&
+        target.adminProfile?.niveauAcces === 'SUPER_ADMIN' &&
+        target.statut === 'ACTIF' &&
+        statut !== 'ACTIF';
+
+      if (deactivating) {
+        const count = await tx.user.count({
+          where: {
+            role: 'ADMIN',
+            statut: 'ACTIF',
+            adminProfile: { is: { niveauAcces: 'SUPER_ADMIN' } },
+          },
+        });
+        if (count <= 1) {
+          throw new ConflictError('Impossible de désactiver le dernier SUPER_ADMIN');
+        }
+      }
+
+      const result = await tx.user.updateMany({
+        where: { id },
+        data: { statut },
+      });
+      return result.count;
+    });
+  }
+
+  /**
+   * Changement de rôle atomique avec protection du dernier SUPER_ADMIN.
+   *
+   * Même mécanisme que updateStatutWithSuperAdminGuard : SELECT ... FOR UPDATE
+   * sur les SUPER_ADMIN actifs, puis vérification du compteur, puis mutation.
+   */
+  async changeRoleWithSuperAdminGuard(
+    id: string,
+    role: UserRole,
+    niveauAcces: AdminAccessLevel | undefined,
+    currentAdminProfileExists: boolean
+  ): Promise<{
+    user: { id: string; role: string };
+    adminProfile: { id: string; niveauAcces: AdminAccessLevel } | null;
+  }> {
+    const { ConflictError, NotFoundError } = await import('../../common/errors/AppError.js');
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Verrouiller les lignes SUPER_ADMIN actifs.
+      await tx.$queryRaw`
+        SELECT 1 FROM "users" "u"
+        INNER JOIN "admin_profiles" "ap" ON "ap"."userId" = "u"."id"
+        WHERE "u"."role" = 'ADMIN'
+          AND "u"."statut" = 'ACTIF'
+          AND "ap"."niveauAcces" = 'SUPER_ADMIN'
+        FOR UPDATE
+      `;
+
+      // 2. Vérifier si on retire le statut SUPER_ADMIN au dernier actif.
+      const target = await tx.user.findUnique({
+        where: { id },
+        include: { adminProfile: true },
+      });
+      if (!target) {
+        throw new NotFoundError('Utilisateur non trouvé');
+      }
+
+      const removingSuperAdmin =
+        target.role === 'ADMIN' &&
+        target.adminProfile?.niveauAcces === 'SUPER_ADMIN' &&
+        target.statut === 'ACTIF' &&
+        (role !== 'ADMIN' || (role === 'ADMIN' && niveauAcces !== 'SUPER_ADMIN'));
+
+      if (removingSuperAdmin) {
+        const count = await tx.user.count({
+          where: {
+            role: 'ADMIN',
+            statut: 'ACTIF',
+            adminProfile: { is: { niveauAcces: 'SUPER_ADMIN' } },
+          },
+        });
+        if (count <= 1) {
+          throw new ConflictError('Impossible de révoquer le statut du dernier SUPER_ADMIN');
+        }
+      }
+
+      // 3. Appliquer le changement (reprise du code existant).
+      if (role === 'ADMIN' && !currentAdminProfileExists) {
+        await tx.adminProfile.create({
+          data: { userId: id, niveauAcces: niveauAcces ?? 'SUPPORT', departement: '' },
+        });
+      }
+      if (role === 'ADMIN' && currentAdminProfileExists && niveauAcces) {
+        await tx.adminProfile.update({
+          where: { userId: id },
+          data: { niveauAcces },
+        });
+      }
+      if (role !== 'ADMIN' && currentAdminProfileExists) {
+        await tx.adminProfile.deleteMany({ where: { userId: id } });
+      }
+
+      const updated = await tx.user.update({
+        where: { id },
+        data: { role },
+        select: USER_DETAIL_SELECT,
+      });
+      return { user: { id: updated.id, role: updated.role }, adminProfile: updated.adminProfile };
     });
   }
 

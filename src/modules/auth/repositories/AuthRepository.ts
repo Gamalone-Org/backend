@@ -148,4 +148,11 @@ export class AuthRepository {
       where: { userId },
     });
   }
+
+  async findAdminPermissionsByProfileId(adminProfileId: string) {
+    return this.prisma.adminProfilePermission.findMany({
+      where: { adminProfileId },
+      select: { permission: true },
+    });
+  }
 }

@@ -7,6 +7,16 @@ const uuidParam = z.string().uuid('Invalid id');
 const pageSchema = z.coerce.number().int().min(1).default(1);
 const limitSchema = z.coerce.number().int().min(1).max(50).default(20);
 
+// Filtre multi-statuts : liste séparée par des virgules, chaque valeur doit
+// être un statut valide de OrderStatus (convention simple, aucune convention
+// multi-statut n'existait dans les routes admin/artisan).
+const statutsListSchema = z
+  .string()
+  .trim()
+  .min(1, 'statut ne peut pas être vide')
+  .transform((value) => value.split(',').map((part) => part.trim()))
+  .pipe(z.array(z.enum(ORDER_STATUSES)).min(1, 'Au moins un statut est requis'));
+
 const fraisLivraisonSchema = z
   .number()
   .nonnegative('Les frais de livraison ne peuvent pas être négatifs')
@@ -75,6 +85,20 @@ export const adminCommandesQuerySchema = z.object({
 export const myCommandesQuerySchema = z.object({
   page: pageSchema,
   limit: limitSchema,
+  statut: statutsListSchema.optional(),
+  q: z.string().trim().max(255).optional(),
+  tri: z.enum(['dateCreation_desc', 'dateCreation_asc']).optional(),
+});
+
+export const commandeArtisanIdParamsSchema = z.object({
+  id: uuidParam,
+});
+
+export const artisanCommandesQuerySchema = z.object({
+  page: pageSchema,
+  limit: limitSchema,
+  statut: z.enum(ORDER_STATUSES).optional(),
+  q: z.string().trim().max(255).optional(),
 });
 
 export type CreateCommandeInput = z.infer<typeof createCommandeSchema>;
@@ -82,3 +106,5 @@ export type CommandeIdParams = z.infer<typeof commandeIdParamsSchema>;
 export type StatutCommandeInput = z.infer<typeof statutCommandeSchema>;
 export type AdminCommandesQuery = z.infer<typeof adminCommandesQuerySchema>;
 export type MyCommandesQuery = z.infer<typeof myCommandesQuerySchema>;
+export type CommandeArtisanIdParams = z.infer<typeof commandeArtisanIdParamsSchema>;
+export type ArtisanCommandesQuery = z.infer<typeof artisanCommandesQuerySchema>;

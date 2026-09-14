@@ -57,6 +57,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
   },
   requireRole: () => (_req: any, _res: any, next: any) => next(),
   requireAdminLevel: () => (_req: any, _res: any, next: any) => next(),
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 vi.mock('../../src/modules/kyc/kyc.factory.js', () => ({

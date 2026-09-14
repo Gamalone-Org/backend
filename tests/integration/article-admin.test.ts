@@ -56,6 +56,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
   },
   requireRole: () => (_req: any, _res: any, next: any) => next(),
   requireAdminLevel: () => (_req: any, _res: any, next: any) => next(),
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 vi.mock('../../src/modules/kyc/kyc.factory.js', () => ({
@@ -124,7 +125,7 @@ describe('Routes admin ARTICLES', () => {
   });
 
   it('POST /api/v1/admin/articles returns 404 for unknown category', async () => {
-    mockCreate.mockRejectedValueOnce(new NotFoundError('Catégorie non trouvée'));
+    mockCreate.mockRejectedValueOnce(new NotFoundError('CatÃ©gorie non trouvÃ©e'));
     const res = await request(app).post('/api/v1/admin/articles').send({
       titre: 'Mon article',
       contenu: 'Contenu',
@@ -164,7 +165,7 @@ describe('Routes admin ARTICLES', () => {
   });
 
   it('GET /api/v1/admin/articles/:id returns 404', async () => {
-    mockGetOne.mockRejectedValueOnce(new NotFoundError('Article non trouvé'));
+    mockGetOne.mockRejectedValueOnce(new NotFoundError('Article non trouvÃ©'));
     const res = await request(app).get(`/api/v1/admin/articles/${ARTICLE_ID}`);
 
     expect(res.status).toBe(404);
@@ -181,7 +182,7 @@ describe('Routes admin ARTICLES', () => {
 
   it('PATCH /api/v1/admin/articles/:id returns 409 when published', async () => {
     mockUpdate.mockRejectedValueOnce(
-      new ConflictError('Seuls les articles non publiés peuvent être modifiés')
+      new ConflictError('Seuls les articles non publiÃ©s peuvent Ãªtre modifiÃ©s')
     );
     const res = await request(app)
       .patch(`/api/v1/admin/articles/${ARTICLE_ID}`)
@@ -198,7 +199,7 @@ describe('Routes admin ARTICLES', () => {
   });
 
   it('DELETE /api/v1/admin/articles/:id returns 404', async () => {
-    mockRemove.mockRejectedValueOnce(new NotFoundError('Article non trouvé'));
+    mockRemove.mockRejectedValueOnce(new NotFoundError('Article non trouvÃ©'));
     const res = await request(app).delete(`/api/v1/admin/articles/${ARTICLE_ID}`);
 
     expect(res.status).toBe(404);
@@ -212,7 +213,7 @@ describe('Routes admin ARTICLES', () => {
   });
 
   it('POST /api/v1/admin/articles/:id/publish returns 409 on invalid transition', async () => {
-    mockPublish.mockRejectedValueOnce(new ConflictError('Transition de statut non autorisée'));
+    mockPublish.mockRejectedValueOnce(new ConflictError('Transition de statut non autorisÃ©e'));
     const res = await request(app).post(`/api/v1/admin/articles/${ARTICLE_ID}/publish`);
 
     expect(res.status).toBe(409);

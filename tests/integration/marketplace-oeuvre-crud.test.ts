@@ -62,6 +62,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
   },
   requireRole: () => (_req: any, _res: any, next: any) => next(),
   requireAdminLevel: () => (_req: any, _res: any, next: any) => next(),
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 vi.mock('../../src/modules/kyc/kyc.factory.js', () => ({
@@ -170,7 +171,7 @@ describe('Marketplace admin oeuvre CRUD routes', () => {
   });
 
   it('GET /api/v1/admin/oeuvres/:id returns 404 for missing oeuvre', async () => {
-    mockGetAdmin.mockRejectedValueOnce(new NotFoundError('Œuvre non trouvée'));
+    mockGetAdmin.mockRejectedValueOnce(new NotFoundError('Å’uvre non trouvÃ©e'));
     const response = await request(app).get(`/api/v1/admin/oeuvres/${OEUVRE_ID}`);
 
     expect(response.status).toBe(404);

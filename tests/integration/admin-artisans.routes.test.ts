@@ -91,6 +91,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
     }
     next();
   },
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 const app = (await import('../../src/app.js')).default;
@@ -213,12 +214,12 @@ describe('Admin Artisans routes (Integration)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('exige une authentification (401) sur le détail', async () => {
+  it('exige une authentification (401) sur le dÃ©tail', async () => {
     const res = await request(app).get('/api/v1/admin/artisans/' + ARTISAN_ID);
     expect(res.status).toBe(401);
   });
 
-  it('renvoie le détail pour un SUPPORT (200)', async () => {
+  it('renvoie le dÃ©tail pour un SUPPORT (200)', async () => {
     const res = await request(app)
       .get('/api/v1/admin/artisans/' + ARTISAN_ID)
       .set(authHeaders());
@@ -234,20 +235,20 @@ describe('Admin Artisans routes (Integration)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('renvoie 404 si l\'artisan détail n\'existe pas', async () => {
-    mockGetArtisanDetail.mockRejectedValue(new (await import('../../src/common/errors/AppError.js')).NotFoundError('Artisan non trouvé'));
+  it('renvoie 404 si l\'artisan dÃ©tail n\'existe pas', async () => {
+    mockGetArtisanDetail.mockRejectedValue(new (await import('../../src/common/errors/AppError.js')).NotFoundError('Artisan non trouvÃ©'));
     const res = await request(app)
       .get('/api/v1/admin/artisans/9a8b7c6d-5e4f-4a3b-9c2d-1e0f1a2b3c4d')
       .set(authHeaders());
     expect(res.status).toBe(404);
   });
 
-  it('exige une authentification (401) sur les œuvres', async () => {
+  it('exige une authentification (401) sur les Å“uvres', async () => {
     const res = await request(app).get('/api/v1/admin/artisans/' + ARTISAN_ID + '/artworks');
     expect(res.status).toBe(401);
   });
 
-  it('liste les œuvres pour un SUPPORT avec le filtre statut', async () => {
+  it('liste les Å“uvres pour un SUPPORT avec le filtre statut', async () => {
     const res = await request(app)
       .get(`/api/v1/admin/artisans/${ARTISAN_ID}/artworks?statut=PUBLIEE&page=2&limit=5`)
       .set(authHeaders());
@@ -255,7 +256,7 @@ describe('Admin Artisans routes (Integration)', () => {
     expect(mockListArtworks).toHaveBeenCalledWith(expect.anything(), ARTISAN_ID, { page: 2, limit: 5, statut: 'PUBLIEE' });
   });
 
-  it('renvoie 400 pour un statut œuvre invalide', async () => {
+  it('renvoie 400 pour un statut Å“uvre invalide', async () => {
     const res = await request(app)
       .get(`/api/v1/admin/artisans/${ARTISAN_ID}/artworks?statut=INVALIDE`)
       .set(authHeaders());
@@ -282,7 +283,7 @@ describe('Admin Artisans routes (Integration)', () => {
     expect(res.status).toBe(400);
   });
 
-  it('refuse un SUPER_ADMIN non admin au niveau suffisant — garde par rôle', async () => {
+  it('refuse un SUPER_ADMIN non admin au niveau suffisant â€” garde par rÃ´le', async () => {
     const res = await request(app)
       .get('/api/v1/admin/artisans')
       .set(authHeaders('ACHETEUR', 'SUPER_ADMIN'));

@@ -99,6 +99,7 @@ vi.mock('../../src/modules/auth/middleware/auth.middleware.js', () => ({
     }
     next();
   },
+  requirePermission: (...permissions: string[]) => (_req: any, _res: any, next: any) => next(),
 }));
 
 const app = (await import('../../src/app.js')).default;
@@ -325,10 +326,10 @@ describe('Routes admin ARTICLES - export & permissions (Integration)', () => {
       .set('Authorization', 'Bearer token')
       .set('x-test-role', 'ADMIN')
       .set('x-test-admin-level', 'SUPPORT')
-      .query({ q: 'ébénisterie d\u2019art' });
+      .query({ q: 'Ã©bÃ©nisterie d\u2019art' });
 
     expect(mockExport).toHaveBeenCalledWith(
-      expect.objectContaining({ q: 'ébénisterie d\u2019art' })
+      expect.objectContaining({ q: 'Ã©bÃ©nisterie d\u2019art' })
     );
   });
 

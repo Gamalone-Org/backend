@@ -6,6 +6,8 @@ import {
   statutCommandeSchema,
   adminCommandesQuerySchema,
   myCommandesQuerySchema,
+  artisanCommandesQuerySchema,
+  commandeArtisanIdParamsSchema,
 } from './order.schema.js';
 
 export class OrderController {
@@ -27,7 +29,8 @@ export class OrderController {
       const result = await this.orderService.getMyCommandes(
         req.user!.id,
         query.page,
-        query.limit
+        query.limit,
+        { statuts: query.statut, q: query.q, tri: query.tri }
       );
       res.status(200).json({ success: true, ...result });
     } catch (error) {
@@ -53,6 +56,51 @@ export class OrderController {
         query.limit,
         { statut: query.statut, q: query.q }
       );
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listArtisan = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const query = artisanCommandesQuerySchema.parse(req.query);
+      const result = await this.orderService.getMyCommandesArtisan(
+        req.user!.id,
+        query.page,
+        query.limit,
+        { statut: query.statut, q: query.q }
+      );
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getArtisan = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = commandeArtisanIdParamsSchema.parse(req.params);
+      const commandeArtisan = await this.orderService.getMyCommandeArtisan(req.user!.id, id);
+      res.status(200).json({ success: true, commandeArtisan });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  preparer = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = commandeArtisanIdParamsSchema.parse(req.params);
+      const result = await this.orderService.preparer(req.user!.id, id);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  expedier = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = commandeArtisanIdParamsSchema.parse(req.params);
+      const result = await this.orderService.expedier(req.user!.id, id);
       res.status(200).json({ success: true, ...result });
     } catch (error) {
       next(error);

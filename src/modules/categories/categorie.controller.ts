@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import {
   categorieIdParamsSchema,
+  categorieParamsSchema,
   createCategorieSchema,
   createSousCategorieSchema,
   listCategoriesQuerySchema,
@@ -45,11 +46,49 @@ export class CategorieController {
     }
   };
 
+  listPublic = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const query = listCategoriesQuerySchema.parse(req.query);
+      const result = await this.service.listPublicCategories({
+        page: query.page ?? 1,
+        limit: query.limit ?? 20,
+        q: query.q,
+      });
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getOne = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = categorieIdParamsSchema.parse(req.params);
       const categorie = await this.service.getCategorie(id);
       res.status(200).json({ success: true, categorie });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getOnePublic = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = categorieIdParamsSchema.parse(req.params);
+      const categorie = await this.service.getPublicCategorie(id);
+      res.status(200).json({ success: true, categorie });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  exportCsv = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const query = listCategoriesQuerySchema.parse(req.query);
+      const csv = await this.service.exportCsv({ statut: query.statut, q: query.q });
+      res
+        .status(200)
+        .setHeader('Content-Type', 'text/csv; charset=utf-8')
+        .setHeader('Content-Disposition', `attachment; filename="categories-${Date.now()}.csv"`)
+        .send(csv);
     } catch (error) {
       next(error);
     }
@@ -113,8 +152,8 @@ export class CategorieController {
 
   listSousCategories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { categorieId } = sousCategorieIdParamsSchema.parse(req.params);
-      const sousCategories = await this.service.listSousCategoriesByCategorie(categorieId);
+      const { categorieId } = categorieParamsSchema.parse(req.params);
+      const sousCategories = await this.service.listPublicSousCategories(categorieId);
       res.status(200).json({ success: true, sousCategories });
     } catch (error) {
       next(error);
@@ -135,9 +174,8 @@ export class CategorieController {
   updateSousCategorie = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { categorieId, sousCategorieId } = sousCategorieIdParamsSchema.parse(req.params);
-      void categorieId;
       const input = updateSousCategorieSchema.parse(req.body);
-      const sousCategorie = await this.service.updateSousCategorie(sousCategorieId, input);
+      const sousCategorie = await this.service.updateSousCategorie(categorieId, sousCategorieId, input);
       res.status(200).json({ success: true, sousCategorie });
     } catch (error) {
       next(error);
@@ -146,8 +184,8 @@ export class CategorieController {
 
   removeSousCategorie = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { sousCategorieId } = sousCategorieIdParamsSchema.parse(req.params);
-      await this.service.deleteSousCategorie(sousCategorieId);
+      const { categorieId, sousCategorieId } = sousCategorieIdParamsSchema.parse(req.params);
+      await this.service.deleteSousCategorie(categorieId, sousCategorieId);
       res.status(204).send();
     } catch (error) {
       next(error);
