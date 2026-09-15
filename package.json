@@ -26,6 +26,7 @@
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "prisma:format": "prisma format",
+    "db:seed": "prisma db seed",
     "sms:test": "tsx tools/test-sms.ts",
     "cloudinary:test": "tsx tools/test-cloudinary.ts",
     "bootstrap:super-admin": "tsx tools/bootstrap-super-admin.ts"
