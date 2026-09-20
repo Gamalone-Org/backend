@@ -19,7 +19,7 @@ import type { PublicOeuvreSelect, AdminOeuvreSelect } from './types.js';
 import { detectMimeTypeFromMagicBytes } from '../kyc/middleware/kyc-upload.middleware.js';
 import { ValidationError } from '../../common/errors/AppError.js';
 
-const publicSelect: PublicOeuvreSelect = {
+export const publicSelect: PublicOeuvreSelect = {
   id: true,
   titre: true,
   description: true,
@@ -60,14 +60,16 @@ const publicSelect: PublicOeuvreSelect = {
   },
 };
 
-const adminSelect: AdminOeuvreSelect = {
+export const adminSelect: AdminOeuvreSelect = {
   ...publicSelect,
   rejectionReason: true,
   publishedByAdminId: true,
   artisan: {
-    ...publicSelect.artisan,
-    user: {
-      select: { id: true, nom: true, telephone: true },
+    select: {
+      ...publicSelect.artisan.select,
+      user: {
+        select: { id: true, nom: true, telephone: true },
+      },
     },
   },
 };

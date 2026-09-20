@@ -82,15 +82,17 @@ export type PublicOeuvreSelect = {
   };
 };
 
-export type AdminOeuvreSelect = PublicOeuvreSelect & {
+export type AdminOeuvreSelect = Omit<PublicOeuvreSelect, 'artisan'> & {
   rejectionReason: true;
   publishedByAdminId: true;
-  artisan: PublicOeuvreSelect['artisan'] & {
-    user: {
-      select: {
-        id: true;
-        nom: true;
-        telephone: true;
+  artisan: {
+    select: Omit<PublicOeuvreSelect['artisan']['select'], 'user'> & {
+      user: {
+        select: {
+          id: true;
+          nom: true;
+          telephone: true;
+        };
       };
     };
   };
