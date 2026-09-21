@@ -7,7 +7,7 @@ const smsProviderSchema = z
   .enum(['mock', 'twilio', 'messagebird', 'afriksms', 'custom'])
   .default('mock');
 const defaultCorsOrigins =
-  'http://localhost:5000,http://localhost:3000,http://localhost:5173,http://localhost:4173';
+  'http://localhost:5000,http://localhost:3000,http://localhost:5173,http://localhost:4173,https://gamalone-frontend.vercel.app';
 const corsOriginsSchema = z
   .string()
   .default(defaultCorsOrigins)
