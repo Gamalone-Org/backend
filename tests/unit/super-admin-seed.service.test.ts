@@ -44,7 +44,7 @@ function makeTx() {
     user: { create: userCreate, findMany: userFindMany, count: userCount, findUnique: userFindUnique, update: userUpdate },
     adminProfile: { create: adminProfileCreate },
     adminAuditLog: { create: auditLogCreate },
-  } as unknown as Prisma.TransactionClientimar;
+  } as unknown as Prisma.TransactionClient;
   return { tx, txMocks: { userCreate, userFindMany, userCount, userFindUnique, userUpdate, adminProfileCreate, auditLogCreate } as TxMocks };
 }
 
@@ -138,6 +138,7 @@ describe('SuperAdminSeedService', () => {
     expect(f.mocks.userUpdate).not.toHaveBeenCalled();
     expect(f.mocks.passwordHash).not.toHaveBeenCalled();
     expect(result.action).toBe('unchanged');
+    
   });
 
   it('3. MOT DE PASSE JAMAIS RÉINITIALISÉ : SUPER_ADMIN existant avec motDePasse déjà hashé → AUCUNE réinitialisation, repair username seulement', async () => {

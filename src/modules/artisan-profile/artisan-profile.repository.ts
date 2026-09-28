@@ -422,4 +422,17 @@ export class ArtisanProfileRepository {
       update: data,
     });
   }
+
+  /**
+   * Lit la préférence de versement d'un artisan.
+   * Même projection que `upsertPaymentPreference` (ligne complète, sans
+   * `select`) pour que GET et PATCH exposent une structure de données
+   * rigoureusement identique. Retourne `null` quand aucune préférence
+   * n'a encore été enregistrée.
+   */
+  async findPaymentPreference(artisanId: string) {
+    return this.prisma.artisanPaymentPreference.findUnique({
+      where: { artisanId },
+    });
+  }
 }

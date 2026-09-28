@@ -47,10 +47,18 @@ export const kycStatusValues = [
   'EXPIRE',
 ] as const;
 
+/**
+ * Jeton spécial, à passer via `?status=ALL` pour obtenir la liste COMPLÈTE
+ * des dossiers KYC, quel que soit leur statut.
+ * Sans ce jeton (paramètre absent), le comportement historique est conservé :
+ * seule la file de revue `SOUMIS` + `EN_ATTENTE` est retournée.
+ */
+export const ADMIN_KYC_STATUS_ALL = 'ALL' as const;
+
 export const adminKycListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(10),
-  status: z.enum(kycStatusValues).optional(),
+  status: z.enum([...kycStatusValues, ADMIN_KYC_STATUS_ALL]).optional(),
 }).strict();
 
 export const adminKycReviewReasonSchema = z.object({

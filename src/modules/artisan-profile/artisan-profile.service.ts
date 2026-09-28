@@ -312,4 +312,16 @@ export class ArtisanProfileService {
     const artisanId = await this.resolveArtisanId(userId);
     return this.repository.upsertPaymentPreference(artisanId, data);
   }
+
+  /**
+   * Retourne la préférence de versement de l'artisan connecté.
+   * L'ownership est dérivé de `req.user.id` via `resolveArtisanId`, exactement
+   * comme pour le PATCH. Si aucune préférence n'existe pas encore, retourne
+   * `null` — comportement métier déjà prévu et exposé par
+   * `GET /api/v1/artisan/profil` (`paiementPreference: null`).
+   */
+  async getVersement(userId: string) {
+    const artisanId = await this.resolveArtisanId(userId);
+    return this.repository.findPaymentPreference(artisanId);
+  }
 }

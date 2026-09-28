@@ -29,6 +29,7 @@ const mockCreateExposition = vi.fn();
 const mockUpdateExposition = vi.fn();
 const mockDeleteExposition = vi.fn();
 const mockUpdateVersement = vi.fn();
+const mockGetVersement = vi.fn();
 
 vi.mock('../../src/modules/artisan-profile/artisan-profile.service.js', () => ({
   ArtisanProfileService: class {
@@ -53,6 +54,7 @@ vi.mock('../../src/modules/artisan-profile/artisan-profile.service.js', () => ({
     updateExposition = mockUpdateExposition;
     deleteExposition = mockDeleteExposition;
     updateVersement = mockUpdateVersement;
+    getVersement = mockGetVersement;
   },
 }));
 
@@ -635,5 +637,143 @@ describe('Artisan profile routes â€” versements (privÃ©)', () => {
       .set('x-test-role', 'ARTISAN')
       .send({ methode: 'MOBILE_MONEY' });
     expect(res.status).toBe(400);
+  });
+
+  // ── GET /api/v1/artisan/profil/versement ──────────────────────────────────
+  describe('GET /api/v1/artisan/profil/versement', () => {
+    const mobileMoneyRow = {
+      id: 'pref-1',
+      artisanId: '123e4567-e89b-12d3-a456-426614174111',
+      methode: 'MOBILE_MONEY',
+      mobileMoneyOperateur: 'Moov Money',
+      mobileMoneyNumero: '+22890123456',
+      virementNomBanque: null,
+      virementIban: null,
+      virementNomCompte: null,
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-01T10:00:00.000Z',
+    };
+
+    const bankTransferRow = {
+      id: 'pref-2',
+      artisanId: '123e4567-e89b-12d3-a456-426614174111',
+      methode: 'VIREMENT_BANCAIRE',
+      mobileMoneyOperateur: null,
+      mobileMoneyNumero: null,
+      virementNomBanque: 'Banque Atlantique',
+      virementIban: 'TG00BBBB0000999999999901',
+      virementNomCompte: 'Awa Koffi',
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-02T10:00:00.000Z',
+    };
+
+    it('returns 200 with the Mobile Money preference of the connected artisan', async () => {
+      mockGetVersement.mockResolvedValue(mobileMoneyRow);
+
+      const res = await request(app)
+        .get('/api/v1/artisan/profil/versement')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ARTISAN')
+        .set('x-test-user-id', 'artisan-1');
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.preference).toEqual(mobileMoneyRow);
+    });
+
+    it('exposes exactly the same keys as the PATCH response', async () => {
+      mockGetVersement.mockResolvedValue(bankTransferRow);
+      mockUpdateVersement.mockResolvedValue(bankTransferRow);
+
+      const patchRes = await request(app)
+        .patch('/api/v1/artisan/profil/versement')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ARTISAN')
+        .send({
+          methode: 'VIREMENT_BANCAIRE',
+          virementNomBanque: 'Banque Atlantique',
+          virementIban: 'TG00BBBB0000999999999901',
+          virementNomCompte: 'Awa Koffi',
+        });
+
+      const getRes = await request(app)
+        .get('/api/v1/artisan/profil/versement')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ARTISAN');
+
+      expect(patchRes.status).toBe(200);
+      expect(getRes.status).toBe(200);
+      expect(Object.keys(patchRes.body).sort()).toEqual(Object.keys(getRes.body).sort());
+      expect(Object.keys(patchRes.body.preference).sort()).toEqual(
+        Object.keys(getRes.body.preference).sort()
+      );
+      expect(getRes.body.preference).toEqual(patchRes.body.preference);
+    });
+
+    it('returns 200 with preference null when no preference exists yet', async () => {
+      mockGetVersement.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get('/api/v1/artisan/profil/versement')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ARTISAN');
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.preference).toBeNull();
+    });
+
+    it('scopes the lookup to the connected user (ownership via req.user)', async () => {
+      mockGetVersement.mockResolvedValue(mobileMoneyRow);
+
+      await request(app)
+        .get('/api/v1/artisan/profil/versement')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ARTISAN')
+        .set('x-test-user-id', 'artisan-42');
+
+      expect(mockGetVersement).toHaveBeenCalledTimes(1);
+      expect(mockGetVersement).toHaveBeenCalledWith('artisan-42');
+    });
+
+    it('returns 401 without a bearer token', async () => {
+      const res = await request(app).get('/api/v1/artisan/profil/versement');
+      expect(res.status).toBe(401);
+      expect(mockGetVersement).not.toHaveBeenCalled();
+    });
+
+    it('returns 403 for a non-ARTISAN role', async () => {
+      const res = await request(app)
+        .get('/api/v1/artisan/profil/versement')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ACHETEUR');
+      expect(res.status).toBe(403);
+      expect(mockGetVersement).not.toHaveBeenCalled();
+    });
+
+    it('returns 403 when the connected ARTISAN has no artisan profile', async () => {
+      mockGetVersement.mockRejectedValue(new ForbiddenError('Profil artisan non trouvé'));
+
+      const res = await request(app)
+        .get('/api/v1/artisan/profil/versement')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ARTISAN');
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FORBIDDEN');
+    });
+
+    it('does not accept an artisanId query override (mass-assignment protection)', async () => {
+      mockGetVersement.mockResolvedValue(mobileMoneyRow);
+
+      const res = await request(app)
+        .get('/api/v1/artisan/profil/versement?artisanId=someone-else')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ARTISAN');
+
+      // Le paramètre est simplement ignoré : l'ownership reste dérivé du token.
+      expect(res.status).toBe(200);
+      expect(mockGetVersement).toHaveBeenCalledWith('artisan-1');
+    });
   });
 });

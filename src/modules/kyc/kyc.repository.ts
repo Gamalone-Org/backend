@@ -1,6 +1,7 @@
 import type { KycReviewAction, Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import { computeRetentionUntil } from '../../config/kyc.js';
 import type { AdminKycListQuery, CreateKycDocumentData, SubmitKycInput } from './kyc.types.js';
+import { ADMIN_KYC_STATUS_ALL } from './kyc.schema.js';
 const activeStatuses = ['BROUILLON', 'SOUMIS', 'EN_ATTENTE', 'VALIDE', 'CORRECTION_REQUISE'] as const;
 
 export class KycRepository {
@@ -146,9 +147,15 @@ export class KycRepository {
     const limit = query.limit && query.limit > 0 ? query.limit : 10;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.KycWhereInput = query.status
-      ? { status: query.status }
-      : { status: { in: ['SOUMIS', 'EN_ATTENTE'] } };
+    // `status=ALL` => liste COMPLÈTE, aucun filtre de statut.
+    // `status=<X>`  => liste filtrée sur ce statut unique.
+    // absent        => file de revue SOUMIS + EN_ATTENTE (comportement historique).
+    const where: Prisma.KycWhereInput =
+      query.status === ADMIN_KYC_STATUS_ALL
+        ? {}
+        : query.status
+          ? { status: query.status }
+          : { status: { in: ['SOUMIS', 'EN_ATTENTE'] } };
 
     const [total, data] = await Promise.all([
       this.prisma.kyc.count({ where }),

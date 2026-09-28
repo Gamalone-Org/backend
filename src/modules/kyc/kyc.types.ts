@@ -1,4 +1,5 @@
 import type { AdminAccessLevel, KycDocumentType, KycReviewAction, KycStatus } from '../../generated/prisma/client.js';
+import type { ADMIN_KYC_STATUS_ALL } from './kyc.schema.js';
 
 export type KycJsonData = Record<string, unknown>;
 
@@ -68,7 +69,11 @@ export type KycDocumentRecord = {
 export type AdminKycListQuery = {
   page?: number;
   limit?: number;
-  status?: KycStatus;
+  /**
+   * Un statut KYC précis, ou `ALL` pour la liste COMPLÈTE (tous statuts).
+   * Absent => file de revue `SOUMIS` + `EN_ATTENTE` uniquement.
+   */
+  status?: KycStatus | typeof ADMIN_KYC_STATUS_ALL;
 };
 
 export type AdminReviewReasonInput = {

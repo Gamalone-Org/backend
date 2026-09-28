@@ -564,6 +564,8 @@ model KycDocument {
 // Catalogue
 // ---------------------------------------------------------------------------
 
+// `CategoryStatus` est partage par les deux systemes de categories
+// (oeuvres et articles) : les deux sont activables/desactivables.
 enum CategoryStatus {
   ACTIVE
   INACTIVE
@@ -575,6 +577,10 @@ enum ArticleStatus {
   PUBLIE
 }
 
+/// Categories du catalogue/marketplace des oeuvres.
+///
+/// Ce modele n'est rattache qu'aux oeuvres et a leurs sous-categories.
+/// Les articles utilisent un systeme totalement independant : `CategorieArticle`.
 model Categorie {
   id                      String         @id @default(uuid()) @db.Uuid
   nom                     String         @unique
@@ -589,7 +595,6 @@ model Categorie {
 
   oeuvres        Oeuvre[]
   sousCategories SousCategorie[]
-  articles       Article[]
 
   @@index([slug])
   @@index([statut])
@@ -692,6 +697,29 @@ model Certificat {
 // Éditorial / Articles
 // ---------------------------------------------------------------------------
 
+/// Categories des articles / blog.
+///
+/// Systeme totalement independant de `Categorie` (categories d'oeuvres) :
+/// une meme appellation peut coexister dans les deux tables, ce sont deux
+/// categories distinctes qui n'ont aucun lien entre elles.
+model CategorieArticle {
+  id                      String         @id @default(uuid()) @db.Uuid
+  nom                     String         @unique
+  description             String         @db.Text
+  slug                    String         @unique
+  imageCouvertureUrl      String?
+  imageCouverturePublicId String?
+  statut                  CategoryStatus @default(ACTIVE)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  articles Article[]
+
+  @@index([slug])
+  @@index([statut])
+  @@map("categories_articles")
+}
+
 model Article {
   id                  String        @id @default(uuid()) @db.Uuid
   titre               String
@@ -701,6 +729,8 @@ model Article {
   statut              ArticleStatus @default(BROUILLON)
   datePublication     DateTime?
   datePlanification   DateTime?
+  // Cle de la categorie d'ARTICLE (et non d'oeuvre). Le nom du champ est
+  // conserve cote API pour ne pas casser le contrat du frontend.
   categorieId         String        @db.Uuid
   imageCouvertureUrl  String?
   imageCouverturePublicId String?
@@ -710,9 +740,12 @@ model Article {
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
-  categorie        Categorie       @relation(fields: [categorieId], references: [id], onDelete: Restrict)
-  auteur           AdminProfile    @relation("ArticleAuthor", fields: [auteurId], references: [id], onDelete: Restrict)
-  publishedByAdmin AdminProfile?   @relation("ArticlePublication", fields: [publishedByAdminId], references: [id], onDelete: SetNull)
+  // Le nom de la relation reste `categorie` : la cle JSON exposee aux clients
+  // ne change pas, seule la table cible passe de `categories` a
+  // `categories_articles`.
+  categorie        CategorieArticle @relation(fields: [categorieId], references: [id], onDelete: Restrict)
+  auteur           AdminProfile     @relation("ArticleAuthor", fields: [auteurId], references: [id], onDelete: Restrict)
+  publishedByAdmin AdminProfile?    @relation("ArticlePublication", fields: [publishedByAdminId], references: [id], onDelete: SetNull)
 
   @@index([slug])
   @@index([categorieId])

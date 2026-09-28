@@ -86,11 +86,11 @@ describe('Module Articles - intégrité du modèle Article', () => {
     expect(schema).not.toMatch(/model\s+ArticleCategory\s*\{/);
   });
 
-  it('relates Article to the global Categorie with a restricting FK', () => {
+  it('relates Article to CategorieArticle with a restricting FK', () => {
     const articleBody = modelBody('Article').replace(/\s+/g, ' ');
-    expect(articleBody).toMatch(/categorie\s+Categorie\s+@relation\(.*onDelete: Restrict/);
-    const categorieBody = modelBody('Categorie').replace(/\s+/g, ' ');
-    expect(categorieBody).toContain('articles Article[]');
+    expect(articleBody).toMatch(/categorie\s+CategorieArticle\s+@relation\(.*onDelete: Restrict/);
+    const categorieArticleBody = modelBody('CategorieArticle').replace(/\s+/g, ' ');
+    expect(categorieArticleBody).toContain('articles Article[]');
   });
 });
 
