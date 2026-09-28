@@ -55,10 +55,10 @@ export class ArticleRepository {
     return this.cloudinaryInstance;
   }
 
-  // --- Categorie (référence du catalogue global) ---
+  // --- CategorieArticle (système indépendant des catégories d'œuvres) ---
 
   findCategorieById(id: string) {
-    return this.prisma.categorie.findUnique({ where: { id } });
+    return this.prisma.categorieArticle.findUnique({ where: { id } });
   }
 
   // --- Article ---

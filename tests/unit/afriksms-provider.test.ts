@@ -384,4 +384,148 @@ describe('AfrikSmsProvider', () => {
       expect(options?.signal).toBeDefined();
     });
   });
+
+  describe('Payload AfrikSMS — MobileNumbers international (documentation officielle)', () => {
+    const successResponse = () =>
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ code: 100, message: 'Success operation' }), { status: 200 })
+      );
+
+    const payloadOf = (fetchMock: ReturnType<typeof successResponse>) => {
+      const body = fetchMock.mock.calls[0][1]?.body as string;
+      return new URLSearchParams(body);
+    };
+
+    it.each([
+      { label: '+228 Togo', e164: '+22890123456', expected: '22890123456' },
+      { label: '+33 France', e164: '+33612345678', expected: '33612345678' },
+      { label: '+1 US', e164: '+12125551234', expected: '12125551234' },
+      { label: '+225 Côte d’Ivoire', e164: '+2250701234567', expected: '2250701234567' },
+      { label: '+229 Bénin', e164: '+22990011223', expected: '22990011223' },
+      { label: '+49 Allemagne', e164: '+4915112345678', expected: '4915112345678' },
+    ])('envoie $label en MobileNumbers=$expected', async ({ e164, expected }) => {
+      const fetchMock = successResponse();
+      global.fetch = fetchMock;
+
+      await provider.sendOtp(e164, '123456');
+
+      expect(payloadOf(fetchMock).get('MobileNumbers')).toBe(expected);
+    });
+
+    it.each([
+      { label: '+228', input: '+22890123456' },
+      { label: '+33', input: '+33612345678' },
+      { label: '+1', input: '+12125551234' },
+    ])('MobileNumbers $label ne contient ni + ni 00', async ({ input }) => {
+      const fetchMock = successResponse();
+      global.fetch = fetchMock;
+
+      await provider.sendOtp(input, '123456');
+
+      const raw = payloadOf(fetchMock).get('MobileNumbers') ?? '';
+      expect(raw).not.toContain('+');
+      expect(raw).not.toContain('00');
+      expect(raw).toMatch(/^\d+$/);
+    });
+
+    it('retire un préfixe 00 résiduel', async () => {
+      const fetchMock = successResponse();
+      global.fetch = fetchMock;
+
+      await provider.sendOtp('0022890123456', '123456');
+
+      expect(payloadOf(fetchMock).get('MobileNumbers')).toBe('22890123456');
+    });
+
+    it('rejette un numéro non convertible (INVALID_SMS_INPUT)', async () => {
+      const fetchMock = successResponse();
+      global.fetch = fetchMock;
+
+      await expect(provider.sendOtp('+336ABC45678', '123456')).rejects.toMatchObject({
+        code: 'INVALID_SMS_INPUT',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('envoie le SenderId configuré (GAMALONE) dans le payload', async () => {
+      const fetchMock = successResponse();
+      global.fetch = fetchMock;
+
+      await provider.sendOtp('+33612345678', '123456');
+
+      expect(payloadOf(fetchMock).get('SenderId')).toBe('GAMALONE');
+    });
+
+    it('envoie exactement les 5 champs documentés', async () => {
+      const fetchMock = successResponse();
+      global.fetch = fetchMock;
+
+      await provider.sendOtp('+33612345678', '123456');
+
+      expect([...payloadOf(fetchMock).keys()].sort()).toEqual([
+        'ApiKey',
+        'ClientId',
+        'Message',
+        'MobileNumbers',
+        'SenderId',
+      ]);
+    });
+
+    it('envoie le message OTP contenant le code', async () => {
+      const fetchMock = successResponse();
+      global.fetch = fetchMock;
+
+      await provider.sendOtp('+33612345678', '654321');
+
+      expect(payloadOf(fetchMock).get('Message')).toContain('654321');
+    });
+  });
+
+  describe('SenderId — longueur maximale 11 caractères (documentation AfrikSMS)', () => {
+    const build = (senderId: string | undefined) =>
+      () =>
+        new AfrikSmsProvider({
+          clientId: 'test-client-id',
+          apiKey: 'test-api-key',
+          senderId,
+          baseUrl: config.baseUrl,
+          timeoutMs: config.timeoutMs,
+        });
+
+    it('accepte GAMALONE (8 caractères)', () => {
+      expect(build('GAMALONE')).not.toThrow();
+    });
+
+    it('accepte exactement 11 caractères', () => {
+      expect(build('GAMALONE123')).not.toThrow();
+    });
+
+    it('refuse 12 caractères', () => {
+      expect(build('GAMALONE1234')).toThrow(/must not exceed 11 characters/);
+    });
+
+    it('refuse un SenderId uniquement composé d\'espaces', () => {
+      expect(build('   ')).toThrow(AppError);
+    });
+
+    it('applique le SenderId trimmed dans le payload', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ code: 100 }), { status: 200 })
+      );
+      global.fetch = fetchMock;
+
+      const trimmed = new AfrikSmsProvider({
+        clientId: 'test-client-id',
+        apiKey: 'test-api-key',
+        senderId: '  GAMALONE  ',
+        baseUrl: config.baseUrl,
+        timeoutMs: config.timeoutMs,
+      });
+
+      await trimmed.sendOtp('+22890123456', '123456');
+
+      const body = fetchMock.mock.calls[0][1]?.body as string;
+      expect(new URLSearchParams(body).get('SenderId')).toBe('GAMALONE');
+    });
+  });
 });

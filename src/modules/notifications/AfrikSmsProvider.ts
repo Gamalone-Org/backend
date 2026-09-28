@@ -13,6 +13,12 @@ export interface AfrikSmsConfig {
 }
 
 /**
+ * Longueur maximale de `SenderId` selon la documentation AfrikSMS
+ * (https://afriksms.com/docapi).
+ */
+export const AFRIKSMS_SENDER_ID_MAX_LENGTH = 11;
+
+/**
  * AfrikSmsProvider implementation of SmsService
  * Integrates with the real AfrikSMS API: https://afriksms.com/docapi
  */
@@ -34,28 +40,51 @@ export class AfrikSmsProvider implements SmsService {
     if (!config.apiKey) {
       throw new AppError(500, 'SMS_API_KEY is not configured', 'SMS_CONFIG_ERROR');
     }
-    if (!config.senderId) {
+
+    // `SenderId` est fourni par la variable d'environnement SMS_SENDER_ID.
+    // AfrikSMS impose une longueur maximale de 11 caractères.
+    const senderId = config.senderId?.trim();
+    if (!senderId) {
       throw new AppError(500, 'SMS_SENDER_ID is not configured', 'SMS_CONFIG_ERROR');
+    }
+    if (senderId.length > AFRIKSMS_SENDER_ID_MAX_LENGTH) {
+      throw new AppError(
+        500,
+        `SMS_SENDER_ID must not exceed ${AFRIKSMS_SENDER_ID_MAX_LENGTH} characters`,
+        'SMS_CONFIG_ERROR'
+      );
     }
     
     // After validation, assign to private fields
     this.clientId = config.clientId;
     this.apiKey = config.apiKey;
-    this.senderId = config.senderId;
+    this.senderId = senderId;
     this.baseUrl = config.baseUrl;
     this.timeoutMs = config.timeoutMs;
   }
 
   /**
-   * Transform phone number from E.164 format to AfrikSMS format
-   * E.164: +228XXXXXXXX → AfrikSMS: 228XXXXXXXX
+   * Transform an E.164 phone number into the format expected by AfrikSMS.
+   * Per the official documentation, `MobileNumbers` must carry the number with
+   * its country code, WITHOUT the leading `+` and WITHOUT a leading `00`.
+   *   E.164    +33612345678 → AfrikSMS  33612345678
+   *   E.164    +22890123456 → AfrikSMS  22890123456
+   * Any country code is forwarded as-is: commercial availability per country
+   * is a provider/account concern, not a backend concern.
    */
   private formatPhoneForAfrikSms(phone: string): string {
-    // Remove leading '+' if present
-    if (phone.startsWith('+')) {
-      return phone.slice(1);
+    const withoutPlus = phone.startsWith('+') ? phone.slice(1) : phone;
+    const digitsOnly = withoutPlus.replace(/^00/, '');
+
+    if (!/^\d+$/.test(digitsOnly)) {
+      throw new AppError(
+        400,
+        'Phone number could not be converted to the AfrikSMS format',
+        'INVALID_SMS_INPUT'
+      );
     }
-    return phone;
+
+    return digitsOnly;
   }
 
   private maskPhone(phone: string): string {

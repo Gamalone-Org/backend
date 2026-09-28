@@ -339,4 +339,13 @@ export class ArtisanProfileController {
       next(error);
     }
   };
+
+  getVersement = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const preference = await this.service.getVersement(req.user!.id);
+      res.status(200).json({ success: true, preference });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

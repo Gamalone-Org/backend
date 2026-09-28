@@ -74,6 +74,7 @@ artisanProfilRouter.patch('/expositions/:expositionId', controller.updateExposit
 artisanProfilRouter.delete('/expositions/:expositionId', controller.deleteExposition);
 
 // Versements (privé)
+artisanProfilRouter.get('/versement', controller.getVersement);
 artisanProfilRouter.patch('/versement', controller.updateVersement);
 
 export default artisanProfilRouter;

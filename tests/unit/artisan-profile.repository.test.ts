@@ -295,6 +295,34 @@ describe('ArtisanProfileRepository — expositions, paiement', () => {
     expect(result.id).toBe('pref-1');
   });
 
+  it('reads the payment preference with the same full-row projection as the upsert', async () => {
+    const { repository, prisma } = buildRepository();
+    prisma.artisanPaymentPreference.findUnique.mockResolvedValue({ id: 'pref-1' });
+
+    const result = await repository.findPaymentPreference(ARTISAN_ID);
+
+    expect(prisma.artisanPaymentPreference.findUnique).toHaveBeenCalledWith({
+      where: { artisanId: ARTISAN_ID },
+    });
+    // Aucune projection `select` : la ligne complète est retournée, exactement
+    // comme le fait `upsertPaymentPreference`, pour que GET et PATCH exposent
+    // la même structure de données.
+    const [args] = prisma.artisanPaymentPreference.findUnique.mock.calls[0];
+    expect(args).not.toHaveProperty('select');
+    expect(args).not.toHaveProperty('include');
+    expect(args).not.toHaveProperty('omit');
+    expect(result.id).toBe('pref-1');
+  });
+
+  it('returns null when the artisan has no payment preference yet', async () => {
+    const { repository, prisma } = buildRepository();
+    prisma.artisanPaymentPreference.findUnique.mockResolvedValue(null);
+
+    const result = await repository.findPaymentPreference(ARTISAN_ID);
+
+    expect(result).toBeNull();
+  });
+
   it('loads the full profile with all collections', async () => {
     const { repository, prisma } = buildRepository();
     prisma.artisanProfile.findUnique.mockResolvedValue({ id: ARTISAN_ID });

@@ -12,6 +12,7 @@ import { OtpRepository } from '../repositories/OtpRepository.js';
 import { createSmsService } from '../../../config/sms-factory.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { loginSchema, registerSchema, verifyPhoneSchema } from '../schema.js';
+import { otpPhoneFields } from '../services/PhoneService.js';
 
 const router = Router();
 const authRepository = new AuthRepository(prisma);
@@ -27,18 +28,31 @@ const authService = new AuthService(
   jwtService
 );
 
+// `countryCode` est optionnel : s'il est fourni, `phone` est le numero national
+// (`{ countryCode: '+33', phone: '612345678' }`). S'il est absent, `phone` reste
+// le numero international complet : le contrat historique est inchange.
 const otpSendSchema = z.object({
-  phone: z.string().min(1, 'Phone number is required'),
+  ...otpPhoneFields,
 });
 
 const otpVerifySchema = z.object({
-  phone: z.string().min(1, 'Phone number is required'),
+  ...otpPhoneFields,
   code: z.string().min(1, 'OTP is required'),
 });
 
 const otpResendSchema = z.object({
-  phone: z.string().min(1, 'Phone number is required'),
+  ...otpPhoneFields,
 });
+
+/**
+ * Compose `countryCode` + `phone` en un E.164 normalise.
+ * Leve `InvalidPhoneError` (-> 400) si l'indicatif ou le numero est invalide.
+ * La composition se fait ici, dans la couche route, pour que les signatures de
+ * `AuthService` / `OtpService` restent inchangees.
+ */
+function resolveRequestPhone(countryCode: string | undefined, value: string): string {
+  return phoneService.resolveFromRequest({ countryCode, phone: value });
+}
 
 router.post('/otp/send', async (req, res, next) => {
   try {
@@ -47,7 +61,10 @@ router.post('/otp/send', async (req, res, next) => {
       ? req.headers['x-forwarded-for'][0]
       : req.headers['x-forwarded-for'];
     const clientIp = req.ip ?? forwardedFor ?? 'unknown';
-    const result = await authService.requestOtp(parsed.phone, clientIp);
+    const result = await authService.requestOtp(
+      resolveRequestPhone(parsed.countryCode, parsed.phone),
+      clientIp
+    );
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     if (error instanceof AppError) {
@@ -71,7 +88,10 @@ router.post('/otp/resend', async (req, res, next) => {
       ? req.headers['x-forwarded-for'][0]
       : req.headers['x-forwarded-for'];
     const clientIp = req.ip ?? forwardedFor ?? 'unknown';
-    const result = await authService.resendOtp(parsed.phone, clientIp);
+    const result = await authService.resendOtp(
+      resolveRequestPhone(parsed.countryCode, parsed.phone),
+      clientIp
+    );
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     if (error instanceof AppError) {
@@ -91,7 +111,10 @@ router.post('/otp/resend', async (req, res, next) => {
 router.post('/otp/verify', async (req, res, next) => {
   try {
     const parsed = otpVerifySchema.parse(req.body);
-    const result = await authService.verifyOtp(parsed.phone, parsed.code);
+    const result = await authService.verifyOtp(
+      resolveRequestPhone(parsed.countryCode, parsed.phone),
+      parsed.code
+    );
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     if (error instanceof AppError) {
@@ -110,9 +133,12 @@ router.post('/otp/verify', async (req, res, next) => {
 
 router.post('/register', async (req, res, next) => {
   try {
-    const parsed = registerSchema.parse(req.body);
+    const { countryCode, ...parsed } = registerSchema.parse(req.body);
     const clientIp = resolveClientIp(req);
-    const result = await authService.register(parsed, clientIp);
+    const result = await authService.register(
+      { ...parsed, telephone: resolveRequestPhone(countryCode, parsed.telephone) },
+      clientIp
+    );
     res.status(201).json({ success: true, ...result });
   } catch (error) {
     if (error instanceof AppError) {
@@ -133,7 +159,7 @@ router.post('/login', async (req, res, next) => {
   try {
     const parsed = loginSchema.parse(req.body);
     const clientIp = resolveClientIp(req);
-    const result = await authService.login(parsed, clientIp);
+    const result = await authService.login(resolveLoginPayload(parsed), clientIp);
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     if (error instanceof AppError) {
@@ -152,8 +178,11 @@ router.post('/login', async (req, res, next) => {
 
 router.post('/verify-phone', async (req, res, next) => {
   try {
-    const parsed = verifyPhoneSchema.parse(req.body);
-    const result = await authService.verifyPhone(parsed.telephone, parsed.code);
+    const { countryCode, ...parsed } = verifyPhoneSchema.parse(req.body);
+    const result = await authService.verifyPhone(
+      resolveRequestPhone(countryCode, parsed.telephone),
+      parsed.code
+    );
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     if (error instanceof AppError) {
@@ -193,6 +222,33 @@ function resolveClientIp(req: Request): string {
     ? req.headers['x-forwarded-for'][0]
     : req.headers['x-forwarded-for'];
   return req.ip ?? forwardedFor ?? 'unknown';
+}
+
+/**
+ * Normalise la charge utile de connexion.
+ *
+ * - `countryCode` fourni => `telephone` devient l'E.164 compose, et `identifier`
+ *   est retire pour que `resolveLoginIdentifier()` ne puisse pas reinterpreter
+ *   le numero (le schema garantit deja leur absence conjointe).
+ * - `countryCode` absent  => payload transmis tel quel, comportement inchange
+ *   (email, username, ou telephone international via `identifier`/`telephone`).
+ */
+function resolveLoginPayload(parsed: z.infer<typeof loginSchema>): {
+  telephone?: string;
+  identifier?: string;
+  motDePasse: string;
+  role?: 'ACHETEUR' | 'ARTISAN' | 'ADMIN';
+} {
+  const { countryCode, telephone, identifier, ...others } = parsed;
+
+  if (countryCode === undefined) {
+    return { ...others, telephone, identifier };
+  }
+
+  return {
+    ...others,
+    telephone: resolveRequestPhone(countryCode, telephone ?? ''),
+  };
 }
 
 export default router;

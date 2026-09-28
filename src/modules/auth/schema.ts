@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import { ArtisanType } from '../../generated/prisma/client.js';
 import { loginIdentifierSchema } from './username.js';
-
-const telephoneSchema = z.string().trim().min(1, 'Phone number is required');
+import { telephonePhoneFields } from './services/PhoneService.js';
 
 const emailSchema = z.email('Invalid email').max(255).optional();
 
@@ -11,7 +10,7 @@ const nomSchema = z.string().trim().min(1, 'Name is required').max(120);
 const motDePasseSchema = z.string().min(8, 'Password must be at least 8 characters').max(128);
 
 const registerBase = {
-  telephone: telephoneSchema,
+  ...telephonePhoneFields,
   email: emailSchema,
   motDePasse: motDePasseSchema,
 };
@@ -40,7 +39,7 @@ export const loginSchema = loginIdentifierSchema;
 
 export const verifyPhoneSchema = z
   .object({
-    telephone: telephoneSchema,
+    ...telephonePhoneFields,
     code: z.string().trim().min(1, 'OTP is required'),
   })
   .strict();

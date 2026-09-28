@@ -39,6 +39,7 @@ function buildService(overrides = {}) {
     updateExposition: vi.fn(),
     deleteExposition: vi.fn(),
     upsertPaymentPreference: vi.fn(),
+    findPaymentPreference: vi.fn(),
     ...overrides,
   } as any;
   return {
@@ -382,5 +383,52 @@ describe('ArtisanProfileService — versements (privé)', () => {
       mobileMoneyNumero: '+22890123456',
     });
     expect(result.methode).toBe('MOBILE_MONEY');
+  });
+
+  it('reads the payment preference of the connected artisan', async () => {
+    const { service, repository } = buildService();
+    repository.findArtisanProfileByUserId.mockResolvedValue({ id: ARTISAN_PROFILE_ID });
+    repository.findPaymentPreference.mockResolvedValue({
+      id: 'pref-1',
+      artisanId: ARTISAN_PROFILE_ID,
+      methode: 'VIREMENT_BANCAIRE',
+      virementNomBanque: 'Banque Atlantique',
+    });
+
+    const result = await service.getVersement(USER_ID);
+
+    // Ownership dérivé du user connecté, jamais d'un artisanId fourni par le client.
+    expect(repository.findArtisanProfileByUserId).toHaveBeenCalledWith(USER_ID);
+    expect(repository.findPaymentPreference).toHaveBeenCalledWith(ARTISAN_PROFILE_ID);
+    expect(result.methode).toBe('VIREMENT_BANCAIRE');
+  });
+
+  it('returns null when no preference exists yet (comportement métier existant)', async () => {
+    const { service, repository } = buildService();
+    repository.findArtisanProfileByUserId.mockResolvedValue({ id: ARTISAN_PROFILE_ID });
+    repository.findPaymentPreference.mockResolvedValue(null);
+
+    const result = await service.getVersement(USER_ID);
+
+    expect(result).toBeNull();
+  });
+
+  it('rejects when the connected user has no artisan profile', async () => {
+    const { service, repository } = buildService();
+    repository.findArtisanProfileByUserId.mockResolvedValue(null);
+
+    await expect(service.getVersement(USER_ID)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(repository.findPaymentPreference).not.toHaveBeenCalled();
+  });
+
+  it('never exposes another artisan preference (repository is scoped to the artisan id)', async () => {
+    const { service, repository } = buildService();
+    repository.findArtisanProfileByUserId.mockResolvedValue({ id: ARTISAN_PROFILE_ID });
+    repository.findPaymentPreference.mockResolvedValue({ id: 'pref-1' });
+
+    await service.getVersement(USER_ID);
+
+    expect(repository.findPaymentPreference).toHaveBeenCalledTimes(1);
+    expect(repository.findPaymentPreference.mock.calls[0]).toEqual([ARTISAN_PROFILE_ID]);
   });
 });

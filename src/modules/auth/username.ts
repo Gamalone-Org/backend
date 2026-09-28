@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { countryCodeSchema } from './services/PhoneService.js';
 
 export const USERNAME_MIN_LENGTH = 3;
 export const USERNAME_MAX_LENGTH = 30;
@@ -57,6 +58,7 @@ export function resolveLoginIdentifier(params: {
 
 export const loginIdentifierSchema = z
   .object({
+    countryCode: countryCodeSchema.optional(),
     telephone: z.string().trim().min(1, 'Phone number is required').optional(),
     identifier: z.string().trim().min(1, 'Identifier is required').optional(),
     motDePasse: z.string().min(1, 'Password is required').max(128),
@@ -69,6 +71,27 @@ export const loginIdentifierSchema = z
         code: z.ZodIssueCode.custom,
         message: 'Either telephone or identifier is required',
       });
+    }
+
+    // `countryCode` n'a de sens que pour une connexion par téléphone :
+    // il doit être accompagné de `telephone` et exclu avec `identifier`
+    // (qui peut être un email ou un username, sans indicatif pays).
+    if (val.countryCode !== undefined) {
+      if (!val.telephone) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['countryCode'],
+          message: 'countryCode requires telephone',
+        });
+      }
+
+      if (val.identifier) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['identifier'],
+          message: 'countryCode cannot be combined with identifier, use telephone instead',
+        });
+      }
     }
   });
 

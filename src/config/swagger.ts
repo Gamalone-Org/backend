@@ -23,6 +23,7 @@ const tags = [
   { name: 'Admin Artisans', description: 'Admin artisan profile management' },
   { name: 'Commandes', description: 'Client order management' },
   { name: 'Articles', description: 'Articles éditoriaux (back-office Admin)' },
+  { name: 'Article Categories', description: 'Catégories d\'articles / blog (back-office Admin)' },
   { name: 'Notifications', description: 'Notifications and messaging' },
   { name: 'Support', description: 'Support and aid flows' },
   { name: 'Favoris', description: 'Mes favoris acheteur (Espace Acheteur)' },
@@ -111,8 +112,21 @@ export const swaggerDocument = {
             'application/json': {
               schema: { $ref: '#/components/schemas/AuthOtpSendRequest' },
               examples: {
-                main: {
+                legacy: {
+                  summary: 'Numéro international complet (contrat historique)',
                   value: { phone: '+22890123456' },
+                },
+                togo: {
+                  summary: 'Togo — indicatif pays + numéro national',
+                  value: { countryCode: '+228', phone: '90123456' },
+                },
+                france: {
+                  summary: 'France — indicatif pays + numéro national',
+                  value: { countryCode: '+33', phone: '612345678' },
+                },
+                usa: {
+                  summary: 'États-Unis — indicatif pays + numéro national',
+                  value: { countryCode: '+1', phone: '2125551234' },
                 },
               },
             },
@@ -154,8 +168,17 @@ export const swaggerDocument = {
             'application/json': {
               schema: { $ref: '#/components/schemas/AuthOtpSendRequest' },
               examples: {
-                main: {
+                legacy: {
+                  summary: 'Numéro international complet (contrat historique)',
                   value: { phone: '+22890123456' },
+                },
+                togo: {
+                  summary: 'Togo — indicatif pays + numéro national',
+                  value: { countryCode: '+228', phone: '90123456' },
+                },
+                france: {
+                  summary: 'France — indicatif pays + numéro national',
+                  value: { countryCode: '+33', phone: '612345678' },
                 },
               },
             },
@@ -201,8 +224,21 @@ export const swaggerDocument = {
             'application/json': {
               schema: { $ref: '#/components/schemas/AuthOtpVerifyRequest' },
               examples: {
-                main: {
+                legacy: {
+                  summary: 'Numéro international complet (contrat historique)',
                   value: { phone: '+22890123456', code: '123456' },
+                },
+                togo: {
+                  summary: 'Togo — indicatif pays + numéro national',
+                  value: { countryCode: '+228', phone: '90123456', code: '123456' },
+                },
+                france: {
+                  summary: 'France — indicatif pays + numéro national',
+                  value: { countryCode: '+33', phone: '612345678', code: '123456' },
+                },
+                usa: {
+                  summary: 'États-Unis — indicatif pays + numéro national',
+                  value: { countryCode: '+1', phone: '2125551234', code: '123456' },
                 },
               },
             },
@@ -276,6 +312,27 @@ export const swaggerDocument = {
               examples: {
                 acheteur: {
                   summary: 'Acheteur registration',
+                  value: {
+                    role: 'ACHETEUR',
+                    nom: 'Awa Mensah',
+                    countryCode: '+228',
+                    telephone: '90123456',
+                    email: 'user@example.com',
+                    motDePasse: 'S3cretPassword!',
+                  },
+                },
+                acheteur_international: {
+                  summary: 'Acheteur registration hors Togo',
+                  value: {
+                    role: 'ACHETEUR',
+                    nom: 'Marie Dupont',
+                    countryCode: '+33',
+                    telephone: '612345678',
+                    motDePasse: 'S3cretPassword!',
+                  },
+                },
+                acheteur_legacy: {
+                  summary: 'Acheteur registration (numéro international complet, contrat historique)',
                   value: {
                     role: 'ACHETEUR',
                     nom: 'Awa Mensah',
@@ -356,6 +413,15 @@ export const swaggerDocument = {
                     role: 'ACHETEUR',
                   },
                 },
+                acheteur_by_country_code: {
+                  summary: 'Acheteur login par indicatif pays + numéro national',
+                  value: {
+                    countryCode: '+33',
+                    telephone: '612345678',
+                    motDePasse: 'S3cretPassword!',
+                    role: 'ACHETEUR',
+                  },
+                },
                 artisan_by_email: {
                   summary: 'Artisan login by email',
                   value: {
@@ -408,10 +474,15 @@ export const swaggerDocument = {
           required: true,
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/AuthOtpVerifyRequest' },
+              schema: { $ref: '#/components/schemas/AuthVerifyPhoneRequest' },
               examples: {
-                main: {
-                  value: { phone: '+22890123456', code: '123456' },
+                legacy: {
+                  summary: 'Numéro international complet (contrat historique)',
+                  value: { telephone: '+22890123456', code: '123456' },
+                },
+                countryCode: {
+                  summary: 'Indicatif pays + numéro national',
+                  value: { countryCode: '+33', telephone: '612345678', code: '123456' },
                 },
               },
             },
@@ -633,18 +704,21 @@ export const swaggerDocument = {
         tags: ['Admin KYC'],
         summary: 'List KYC records for review',
         description:
-          'Lists all KYC records requiring administrative review (defaults to SOUMIS and EN_ATTENTE).',
+          'Lists KYC records. Omitting `status` returns the review queue (SOUMIS + EN_ATTENTE). Pass `status=ALL` to retrieve the COMPLETE list of KYC records regardless of status. Results are always paginated (limit max 100).',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
-          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 10 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 10, maximum: 100 } },
           {
             name: 'status',
             in: 'query',
             required: false,
+            description:
+              'Exact KYC status filter. Use `ALL` for every KYC record regardless of status. Omit for the SOUMIS + EN_ATTENTE review queue.',
             schema: {
               type: 'string',
               enum: [
+                'ALL',
                 'SOUMIS',
                 'EN_ATTENTE',
                 'VALIDE',
@@ -3090,9 +3164,174 @@ export const swaggerDocument = {
           '403': { description: 'Forbidden: insufficient admin level' },
           '404': { description: 'Article or image not found' },
         },
+},
+  },
+  '/api/v1/admin/article-categories': {
+    post: {
+      tags: ['Article Categories'],
+      summary: 'Create an article category (admin)',
+      description:
+        'Creates a category for articles/blog. The slug is auto-generated from the name (unique, collision handled). Requires MODERATEUR admin level minimum.',
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/CategorieArticleCreateRequest' },
+          },
+        },
+      },
+      responses: {
+        '201': { description: 'Article category created' },
+        '400': { description: 'Invalid payload' },
+        '401': { description: 'Authentication required' },
+        '403': { description: 'Forbidden: insufficient admin level' },
+        '409': { description: 'Category with this name already exists' },
       },
     },
-    '/api/v1/admin/users': {
+    get: {
+      tags: ['Article Categories'],
+      summary: 'List article categories (admin)',
+      description:
+        'Paginated list of article categories with filters (statut, q) and sorting by name. Requires SUPPORT admin level minimum.',
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+        {
+          name: 'limit',
+          in: 'query',
+          required: false,
+          schema: { type: 'integer', default: 20, maximum: 100 },
+        },
+        {
+          name: 'statut',
+          in: 'query',
+          required: false,
+          schema: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+        },
+        { name: 'q', in: 'query', required: false, schema: { type: 'string' } },
+      ],
+      responses: {
+        '200': { description: 'Paginated list of article categories' },
+        '400': { description: 'Invalid query parameters' },
+        '401': { description: 'Authentication required' },
+        '403': { description: 'Forbidden: admin access required' },
+      },
+    },
+  },
+  '/api/v1/admin/article-categories/{id}': {
+    get: {
+      tags: ['Article Categories'],
+      summary: 'Get an article category (admin)',
+      description:
+        'Returns full article category details including article count. Requires SUPPORT admin level minimum.',
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+      ],
+      responses: {
+        '200': { description: 'Article category details' },
+        '400': { description: 'Invalid category id' },
+        '401': { description: 'Authentication required' },
+        '403': { description: 'Forbidden: admin access required' },
+        '404': { description: 'Article category not found' },
+      },
+    },
+    patch: {
+      tags: ['Article Categories'],
+      summary: 'Update an article category (admin)',
+      description:
+        'Updates nom, description or statut. The slug is regenerated when the name changes. Requires MODERATEUR admin level minimum.',
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/CategorieArticleUpdateRequest' },
+          },
+        },
+      },
+      responses: {
+        '200': { description: 'Article category updated' },
+        '400': { description: 'Invalid payload' },
+        '401': { description: 'Authentication required' },
+        '403': { description: 'Forbidden: insufficient admin level' },
+        '404': { description: 'Article category not found' },
+        '409': { description: 'Category with this name already exists' },
+      },
+    },
+    delete: {
+      tags: ['Article Categories'],
+      summary: 'Delete an article category (admin)',
+      description:
+        'Deletes an article category only if it has no attached articles; otherwise a business conflict is returned. Requires MODERATEUR admin level minimum.',
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+      ],
+      responses: {
+        '204': { description: 'Article category deleted' },
+        '401': { description: 'Authentication required' },
+        '403': { description: 'Forbidden: insufficient admin level' },
+        '404': { description: 'Article category not found' },
+        '409': { description: 'Category still referenced by articles' },
+      },
+    },
+  },
+  '/api/v1/admin/article-categories/{id}/image': {
+    post: {
+      tags: ['Article Categories'],
+      summary: 'Upload article category cover image (admin)',
+      description:
+        'Uploads a cover image (multipart, field "file", JPEG/PNG/WEBP max 10MB) via Cloudinary. Replaces and deletes any previous image. Requires MODERATEUR admin level minimum.',
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              properties: {
+                file: { type: 'string', format: 'binary' },
+              },
+              required: ['file'],
+            },
+          },
+        },
+      },
+      responses: {
+        '200': { description: 'Cover image uploaded' },
+        '400': { description: 'Invalid image, no file, or format not allowed' },
+        '401': { description: 'Authentication required' },
+        '403': { description: 'Forbidden: insufficient admin level' },
+        '404': { description: 'Article category not found' },
+        '502': { description: 'Cloudinary upload failure' },
+      },
+    },
+    delete: {
+      tags: ['Article Categories'],
+      summary: 'Delete article category cover image (admin)',
+      description:
+        'Removes the cover image from Cloudinary and clears the fields. Requires MODERATEUR admin level minimum.',
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+      ],
+      responses: {
+        '200': { description: 'Cover image removed' },
+        '401': { description: 'Authentication required' },
+        '403': { description: 'Forbidden: insufficient admin level' },
+        '404': { description: 'Article category or image not found' },
+      },
+    },
+  },
+  '/api/v1/admin/users': {
       get: {
         tags: ['Users'],
         summary: 'List users (admin)',
@@ -4060,6 +4299,20 @@ export const swaggerDocument = {
       },
     },
     '/api/v1/artisan/profil/versement': {
+      get: {
+        tags: ['Artisans'],
+        summary: 'Get my payout preferences (private)',
+        description:
+          'Returns the payout preference of the authenticated artisan. The response uses exactly the same data structure as PATCH /api/v1/artisan/profil/versement (full row of artisan_payment_preferences). If no preference has been saved yet, `preference` is null. Données strictement privées, jamais exposées aux endpoints publics.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'Payout preference retrieved (`preference` is null when none exists yet)',
+          },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: authenticated user is not an artisan' },
+        },
+      },
       patch: {
         tags: ['Artisans'],
         summary: 'Set my payout preferences (private)',
@@ -4493,20 +4746,56 @@ export const swaggerDocument = {
           },
         },
       },
+      AuthCountryCode: {
+        type: 'string',
+        description:
+          'Optional international dialling code, with its leading "+" and 1 to 3 digits. When provided, `phone`/`telephone` is interpreted as a NATIONAL number and the full E.164 number is composed server-side. When omitted, `phone`/`telephone` must already be a full E.164 number (legacy contract).',
+        example: '+33',
+        maxLength: 8,
+        pattern: '^\\+?\\d{1,3}$',
+      },
       AuthOtpSendRequest: {
         type: 'object',
         properties: {
-          phone: { type: 'string', example: '+22890123456' },
+          countryCode: { $ref: '#/components/schemas/AuthCountryCode' },
+          phone: {
+            type: 'string',
+            description:
+              'National number when `countryCode` is provided, otherwise a full E.164 number. Normalized server-side to E.164.',
+            example: '612345678',
+          },
         },
         required: ['phone'],
       },
       AuthOtpVerifyRequest: {
         type: 'object',
         properties: {
-          phone: { type: 'string', example: '+22890123456' },
+          countryCode: { $ref: '#/components/schemas/AuthCountryCode' },
+          phone: {
+            type: 'string',
+            description:
+              'National number when `countryCode` is provided, otherwise a full E.164 number. Normalized server-side to E.164.',
+            example: '612345678',
+          },
           code: { type: 'string', example: '123456' },
         },
         required: ['phone', 'code'],
+      },
+      AuthVerifyPhoneRequest: {
+        type: 'object',
+        description:
+          'Verifies a phone number for an EXISTING account. Unlike /otp/verify, it does not auto-create the user.',
+        properties: {
+          countryCode: { $ref: '#/components/schemas/AuthCountryCode' },
+          telephone: {
+            type: 'string',
+            description:
+              'National number when `countryCode` is provided, otherwise a full E.164 number. Normalized server-side to E.164.',
+            example: '612345678',
+          },
+          code: { type: 'string', example: '123456' },
+        },
+        required: ['telephone', 'code'],
       },
       AuthRegisterRequest: {
         type: 'object',
@@ -4517,7 +4806,13 @@ export const swaggerDocument = {
             description: 'Buyer name or artisan atelier name',
             example: 'Awa Mensah',
           },
-          telephone: { type: 'string', example: '+22890123456' },
+          countryCode: { $ref: '#/components/schemas/AuthCountryCode' },
+          telephone: {
+            type: 'string',
+            description:
+              'National number when `countryCode` is provided, otherwise a full E.164 number. Stored normalized to E.164.',
+            example: '612345678',
+          },
           email: { type: 'string', format: 'email', example: 'user@example.com' },
           specialite: {
             type: 'string',
@@ -4546,13 +4841,21 @@ export const swaggerDocument = {
             type: 'string',
             example: 'g.apedo',
             description:
-              'Compte à authentifier, résolu par contenu : email si "@", téléphone international si "phone-like", sinon username. Au moins un parmi identifier ou telephone est requis.',
+              'Compte à authentifier, résolu par contenu : email si "@", téléphone international si "phone-like", sinon username. Au moins un parmi identifier ou telephone est requis. Mutuellement exclusif avec countryCode.',
+          },
+          countryCode: {
+            type: 'string',
+            description:
+              'Optional international dialling code, with its leading "+" and 1 to 3 digits. Only accepted together with `telephone` (where `telephone` is a NATIONAL number), never with `identifier`.',
+            example: '+33',
+            maxLength: 8,
+            pattern: '^\\+?\\d{1,3}$',
           },
           telephone: {
             type: 'string',
             example: '+22890123456',
             description:
-              'Champ hérité des anciens clients : équivalent à identifier pour un numéro de téléphone. Conservé par rétrocompatibilité.',
+              'Champ hérité des anciens clients : équivalent à identifier pour un numéro de téléphone. Accepte un numéro national lorsque countryCode est fourni, sinon un E.164 complet. Conservé par rétrocompatibilité.',
           },
           motDePasse: { type: 'string', format: 'password', example: 'S3cretPassword!' },
           role: {
@@ -5229,6 +5532,46 @@ export const swaggerDocument = {
           updatedAt: { type: 'string', format: 'date-time' },
         },
         required: ['id', 'titre', 'contenu', 'slug', 'statut', 'categorieId', 'auteurId', 'createdAt', 'updatedAt'],
+      },
+      CategorieArticleCreateRequest: {
+        type: 'object',
+        properties: {
+          nom: { type: 'string', maxLength: 255 },
+          description: { type: 'string', maxLength: 2000 },
+          statut: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+        },
+        required: ['nom'],
+        additionalProperties: false,
+      },
+      CategorieArticleUpdateRequest: {
+        type: 'object',
+        properties: {
+          nom: { type: 'string', maxLength: 255 },
+          description: { type: 'string', maxLength: 2000 },
+          statut: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+        },
+        additionalProperties: false,
+      },
+      CategorieArticle: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nom: { type: 'string' },
+          description: { type: 'string' },
+          slug: { type: 'string' },
+          imageCouvertureUrl: { type: 'string', nullable: true },
+          imageCouverturePublicId: { type: 'string', nullable: true },
+          statut: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          _count: {
+            type: 'object',
+            properties: {
+              articles: { type: 'integer' },
+            },
+          },
+        },
+        required: ['id', 'nom', 'description', 'slug', 'statut', 'createdAt', 'updatedAt'],
       },
       AdminDashboardResponse: {
         type: 'object',

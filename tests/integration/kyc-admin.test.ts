@@ -119,6 +119,119 @@ describe('Admin KYC Review Routes (Integration)', () => {
     expect(res.body.data).toHaveLength(1);
   });
 
+  // GET /api/v1/admin/kyc — sélection de la liste
+  describe('GET /api/v1/admin/kyc — périmètre de la liste', () => {
+    it('sends no status filter when the query param is absent (review queue)', async () => {
+      await request(app)
+        .get('/api/v1/admin/kyc')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ADMIN');
+
+      expect(mockListPendingReviews).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'admin-1', role: 'ADMIN' }),
+        { page: 1, limit: 10 }
+      );
+    });
+
+    it('returns 200 and forwards status=ALL for the complete KYC list', async () => {
+      mockListPendingReviews.mockResolvedValue({
+        data: [
+          { id: testKycId, status: 'SOUMIS' },
+          { id: '22222222-2222-4222-8222-222222222222', status: 'VALIDE' },
+          { id: '33333333-3333-4333-8333-333333333333', status: 'BROUILLON' },
+          { id: '44444444-4444-4444-8444-444444444444', status: 'REJETE' },
+        ],
+        pagination: { page: 1, limit: 10, total: 4, totalPages: 1 },
+      });
+
+      const res = await request(app)
+        .get('/api/v1/admin/kyc?status=ALL')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ADMIN');
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toHaveLength(4);
+      expect(res.body.pagination).toEqual({ page: 1, limit: 10, total: 4, totalPages: 1 });
+      expect(mockListPendingReviews).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'admin-1', role: 'ADMIN' }),
+        { page: 1, limit: 10, status: 'ALL' }
+      );
+    });
+
+    it('forwards status=ALL together with pagination parameters', async () => {
+      await request(app)
+        .get('/api/v1/admin/kyc?status=ALL&page=2&limit=100')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ADMIN');
+
+      expect(mockListPendingReviews).toHaveBeenCalledWith(expect.anything(), {
+        page: 2,
+        limit: 100,
+        status: 'ALL',
+      });
+    });
+
+    it('still accepts an exact status filter', async () => {
+      const res = await request(app)
+        .get('/api/v1/admin/kyc?status=REJETE')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ADMIN');
+
+      expect(res.status).toBe(200);
+      expect(mockListPendingReviews).toHaveBeenCalledWith(expect.anything(), {
+        page: 1,
+        limit: 10,
+        status: 'REJETE',
+      });
+    });
+
+    it('returns 400 for an unknown status and never reaches the service', async () => {
+      const res = await request(app)
+        .get('/api/v1/admin/kyc?status=INCONNU')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ADMIN');
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('VALIDATION_ERROR');
+      expect(mockListPendingReviews).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 for a lowercase all token (the contract is explicit)', async () => {
+      const res = await request(app)
+        .get('/api/v1/admin/kyc?status=all')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ADMIN');
+
+      expect(res.status).toBe(400);
+      expect(mockListPendingReviews).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 for a comma-separated status list', async () => {
+      const res = await request(app)
+        .get('/api/v1/admin/kyc?status=SOUMIS,VALIDE')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ADMIN');
+
+      expect(res.status).toBe(400);
+      expect(mockListPendingReviews).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 for status=ALL when unauthenticated', async () => {
+      const res = await request(app).get('/api/v1/admin/kyc?status=ALL');
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 403 for status=ALL when role is not ADMIN', async () => {
+      const res = await request(app)
+        .get('/api/v1/admin/kyc?status=ALL')
+        .set('Authorization', 'Bearer token')
+        .set('x-test-role', 'ACHETEUR');
+      expect(res.status).toBe(403);
+      expect(mockListPendingReviews).not.toHaveBeenCalled();
+    });
+  });
+
   // GET /api/v1/admin/kyc/:id
   it('GET /api/v1/admin/kyc/:id returns 400 for non-UUID param', async () => {
     const res = await request(app)
