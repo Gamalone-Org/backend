@@ -33,6 +33,14 @@ export type ListCategoriesArticleOptions = CategorieArticleFilters & {
   limit: number;
 };
 
+const PUBLIC_CATEGORIE_ARTICLE_SELECT = {
+  id: true,
+  nom: true,
+  slug: true,
+  description: true,
+  imageCouvertureUrl: true,
+} satisfies Prisma.CategorieArticleSelect;
+
 /**
  * Accès à la table `categories_articles`.
  *
@@ -97,6 +105,26 @@ export class CategorieArticleRepository {
         skip: (options.page - 1) * options.limit,
         take: options.limit,
         include: { _count: { select: { articles: true } } },
+      }),
+    ]);
+
+    return { items, total, page: options.page, limit: options.limit };
+  }
+
+  async listPublicCategoriesArticle(options: ListCategoriesArticleOptions) {
+    const where: Prisma.CategorieArticleWhereInput = {
+      statut: 'ACTIVE',
+      ...(options.q ? { nom: { contains: options.q, mode: 'insensitive' } } : {}),
+    };
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.categorieArticle.count({ where }),
+      this.prisma.categorieArticle.findMany({
+        where,
+        orderBy: [{ nom: 'asc' }],
+        skip: (options.page - 1) * options.limit,
+        take: options.limit,
+        select: PUBLIC_CATEGORIE_ARTICLE_SELECT,
       }),
     ]);
 

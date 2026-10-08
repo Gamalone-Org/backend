@@ -3,6 +3,7 @@ import {
   articleIdParamsSchema,
   createArticleSchema,
   listArticlesQuerySchema,
+  publicListArticlesQuerySchema,
   scheduleArticleSchema,
   updateArticleSchema,
 } from './article.schema.js';
@@ -45,6 +46,33 @@ export class ArticleController {
         tri: query.tri,
       });
       res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // --- Consultation publique (sans authentification) ---
+
+  listPublic = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const query = publicListArticlesQuerySchema.parse(req.query);
+      const result = await this.service.listPublicArticles({
+        page: query.page ?? 1,
+        limit: query.limit ?? 20,
+        categorieId: query.categorieId,
+        q: query.q,
+      });
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getPublic = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = articleIdParamsSchema.parse(req.params);
+      const article = await this.service.getPublicArticle(id);
+      res.status(200).json({ success: true, article });
     } catch (error) {
       next(error);
     }

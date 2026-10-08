@@ -65,4 +65,13 @@ adminArticleRouter.post(
 );
 adminArticleRouter.delete('/:id/cover', requireAdminLevel('MODERATEUR'), controller.deleteCover);
 
+/**
+ * Consultation publique du blog/journal : aucune authentification.
+ * Seuls les articles PUBLIE (non soft-deleted) sont exposés.
+ */
+export const publicArticleRouter = Router();
+
+publicArticleRouter.get('/', controller.listPublic);
+publicArticleRouter.get('/:id', controller.getPublic);
+
 export default adminArticleRouter;

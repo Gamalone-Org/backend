@@ -15,8 +15,14 @@ import { artisanPublicRouter } from '../modules/artisans/artisan-public.routes.j
 import { myCommandeRouter } from '../modules/orders/order.routes.js';
 import { adminCommandeRouter } from '../modules/orders/order.admin.routes.js';
 import { artisanCommandeRouter } from '../modules/orders/order.artisan.routes.js';
-import { adminArticleRouter } from '../modules/articles/article.routes.js';
-import { adminArticleCategorieRouter } from '../modules/categories-article/categorie-article.routes.js';
+import {
+  adminArticleRouter,
+  publicArticleRouter,
+} from '../modules/articles/article.routes.js';
+import {
+  adminArticleCategorieRouter,
+  publicArticleCategorieRouter,
+} from '../modules/categories-article/categorie-article.routes.js';
 import { adminUserRouter } from '../modules/users/users.routes.js';
 import { adminDashboardRouter } from '../modules/admin/dashboard/dashboard.routes.js';
 import { adminArtisansRouter } from '../modules/admin/artisans/admin-artisans.routes.js';
@@ -61,6 +67,10 @@ router.use('/v1/admin/commandes', adminCommandeRouter);
 router.use('/v1/admin/articles', adminArticleRouter);
 // Catégories d'articles : système indépendant de /v1/categories (œuvres).
 router.use('/v1/admin/article-categories', adminArticleCategorieRouter);
+
+// Blog public : consultation sans authentification, uniquement PUBLIE / ACTIVE.
+router.use('/v1/articles', publicArticleRouter);
+router.use('/v1/article-categories', publicArticleCategorieRouter);
 
 router.use('/v1/admin/users', adminUserRouter);
 
