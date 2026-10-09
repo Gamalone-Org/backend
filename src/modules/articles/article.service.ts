@@ -1,4 +1,8 @@
-import { ArticleRepository, type ListArticlesOptions } from './article.repository.js';
+import {
+  ArticleRepository,
+  type ListArticlesOptions,
+  type ListPublicArticlesOptions,
+} from './article.repository.js';
 import {
   ConflictError,
   NotFoundError,
@@ -160,6 +164,21 @@ export class ArticleService {
 
   listArticles(options: ListArticlesOptions) {
     return this.repository.listArticles(options);
+  }
+
+  // --- Consultation publique (uniquement les articles PUBLIE, jamais les
+  // BROUILLON / PLANIFIE / soft-deleted) ---
+
+  listPublicArticles(options: ListPublicArticlesOptions) {
+    return this.repository.listPublicArticles(options);
+  }
+
+  async getPublicArticle(id: string) {
+    const article = await this.repository.findPublicArticleById(id);
+    if (!article) {
+      throw new NotFoundError('Article non trouvé');
+    }
+    return article;
   }
 
   async exportCsv(options: ListArticlesOptions) {

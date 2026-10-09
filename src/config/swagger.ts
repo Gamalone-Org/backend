@@ -22,8 +22,15 @@ const tags = [
   { name: 'Admin Dashboard', description: 'Admin dashboard statistics and overview' },
   { name: 'Admin Artisans', description: 'Admin artisan profile management' },
   { name: 'Commandes', description: 'Client order management' },
-  { name: 'Articles', description: 'Articles éditoriaux (back-office Admin)' },
-  { name: 'Article Categories', description: 'Catégories d\'articles / blog (back-office Admin)' },
+  {
+    name: 'Articles',
+    description: 'Articles éditoriaux (back-office Admin et consultation publique du blog)',
+  },
+  {
+    name: 'Article Categories',
+    description:
+      'Catégories d\'articles / blog (back-office Admin et consultation publique du blog)',
+  },
   { name: 'Notifications', description: 'Notifications and messaging' },
   { name: 'Support', description: 'Support and aid flows' },
   { name: 'Favoris', description: 'Mes favoris acheteur (Espace Acheteur)' },
@@ -4346,6 +4353,161 @@ export const swaggerDocument = {
         },
       },
     },
+    '/api/v1/article-categories': {
+      get: {
+        tags: ['Article Categories'],
+        summary: 'List active article categories (public)',
+        description:
+          'Rota pública del blog: no requiere autenticación. Devuelve únicamente las categorías de artículos con statut = ACTIVE, con paginación y búsqueda opcional por nombre. Las categorías INACTIVE nunca se exponen. Aucun Bearer token requis.',
+        security: [],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 100 },
+          },
+          {
+            name: 'q',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+            description: 'Recherche insensible à la casse sur le nom de la catégorie',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Paginated list of ACTIVE article categories',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    items: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/PublicCategorieArticle' },
+                    },
+                    total: { type: 'integer', example: 3 },
+                    page: { type: 'integer', example: 1 },
+                    limit: { type: 'integer', example: 20 },
+                    totalPages: { type: 'integer', example: 1 },
+                  },
+                },
+                examples: {
+                  success: {
+                    summary: 'Catégories actives',
+                    value: {
+                      success: true,
+                      items: [
+                        {
+                          id: '11111111-1111-1111-1111-111111111111',
+                          nom: 'Artisanat',
+                          slug: 'artisanat',
+                          description: 'Savoir-faire et métiers d\u2019art',
+                          imageCouvertureUrl: 'https://res.cloudinary.com/gamalone/image/upload/v1/articles/categorie.jpg',
+                        },
+                      ],
+                      total: 1,
+                      page: 1,
+                      limit: 20,
+                      totalPages: 1,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+        },
+      },
+    },
+    '/api/v1/articles': {
+      get: {
+        tags: ['Articles'],
+        summary: 'List published articles (public)',
+        description:
+          'Consultation publique du blog/journal: aucun Bearer token requis. Retourne uniquement les articles avec statut = PUBLIE et non soft-deleted. Les articles BROUILLON, PLANIFIE et supprimés ne sont jamais exposés. Filtre optionnel par categorieId (catégorie d\u2019ARTICLE), recherche q et pagination. Tri par date de publication décroissante.',
+        security: [],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', default: 1 } },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 20, maximum: 100 },
+          },
+          {
+            name: 'categorieId',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', format: 'uuid' },
+            description: 'Filtre par catégorie d\u2019article (CategorieArticle)',
+          },
+          {
+            name: 'q',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+            description: 'Recherche sur le titre, le contenu, le slug, la catégorie et l\u2019auteur',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Paginated list of published articles',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    items: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/PublicArticle' },
+                    },
+                    total: { type: 'integer', example: 2 },
+                    page: { type: 'integer', example: 1 },
+                    limit: { type: 'integer', example: 20 },
+                  },
+                },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+        },
+      },
+    },
+    '/api/v1/articles/{id}': {
+      get: {
+        tags: ['Articles'],
+        summary: 'Get a published article (public)',
+        description:
+          'Détail publique d\u2019un article du blog: aucun Bearer token requis. Renvoie uniquement un article PUBLIE. Un article inexistant, BROUILLON, PLANIFIE ou soft-deleted renvoie 404. Aucune donnée interne d\u2019administration (statut, auteur administratif, identifiants de publication, modération) n\u2019est exposée.',
+        security: [],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Published article details',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    article: { $ref: '#/components/schemas/PublicArticle' },
+                  },
+                },
+              },
+            },
+          },
+          '400': { description: 'Invalid article id' },
+          '404': { description: 'Article not found or not published' },
+        },
+      },
+    },
   },
   components: {
     securitySchemes: {
@@ -4356,6 +4518,48 @@ export const swaggerDocument = {
       },
     },
     schemas: {
+      PublicCategorieArticle: {
+        type: 'object',
+        description: 'Catégorie d\u2019article exposée publiquement (statut ACTIVE uniquement).',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nom: { type: 'string', example: 'Artisanat' },
+          slug: { type: 'string', example: 'artisanat' },
+          description: { type: 'string', example: 'Savoir-faire et métiers d\u2019art' },
+          imageCouvertureUrl: { type: 'string', nullable: true },
+        },
+      },
+      PublicArticleCategorie: {
+        type: 'object',
+        description: 'Catégorie d\u2019article rattachée à un article publié (projection publique).',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nom: { type: 'string' },
+          slug: { type: 'string' },
+          description: { type: 'string' },
+          imageCouvertureUrl: { type: 'string', nullable: true },
+        },
+      },
+      PublicArticle: {
+        type: 'object',
+        description:
+          'Article du blog exposé publiquement (statut PUBLIE uniquement, jamais soft-deleted).',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          titre: { type: 'string', example: 'Le bronze au Togo' },
+          slug: { type: 'string', example: 'le-bronze-au-togo' },
+          metaDescription: { type: 'string', nullable: true },
+          contenu: {
+            type: 'string',
+            description: 'Présent uniquement à la consultation du détail.',
+          },
+          imageCouvertureUrl: { type: 'string', nullable: true },
+          datePublication: { type: 'string', format: 'date-time', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          categorie: { $ref: '#/components/schemas/PublicArticleCategorie' },
+        },
+      },
       KycSubmissionRequest: {
         type: 'object',
         properties: {

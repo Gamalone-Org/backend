@@ -6,6 +6,7 @@ import { CloudinaryService } from '../../shared/services/cloudinary/index.js';
 
 export {
   adminArticleRouter,
+  publicArticleRouter,
 } from './article.routes.js';
 export { ArticleRepository } from './article.repository.js';
 export { ArticleService } from './article.service.js';

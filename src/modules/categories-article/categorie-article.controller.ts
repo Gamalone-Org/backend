@@ -3,6 +3,7 @@ import {
   categorieArticleIdParamsSchema,
   createCategorieArticleSchema,
   listCategoriesArticleQuerySchema,
+  publicListCategoriesArticleQuerySchema,
   updateCategorieArticleSchema,
 } from './categorie-article.schema.js';
 import { CategorieArticleService } from './categorie-article.service.js';
@@ -40,6 +41,22 @@ export class CategorieArticleController {
         page: query.page ?? 1,
         limit: query.limit ?? 20,
         statut: query.statut,
+        q: query.q,
+      });
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // --- Consultation publique (sans authentification) ---
+
+  listPublic = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const query = publicListCategoriesArticleQuerySchema.parse(req.query);
+      const result = await this.service.listPublicCategoriesArticle({
+        page: query.page ?? 1,
+        limit: query.limit ?? 20,
         q: query.q,
       });
       res.status(200).json({ success: true, ...result });

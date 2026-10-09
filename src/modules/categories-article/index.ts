@@ -4,7 +4,10 @@ import { CategorieArticleService } from './categorie-article.service.js';
 import { prisma } from '../../config/database.js';
 import { CloudinaryService } from '../../shared/services/cloudinary/index.js';
 
-export { adminArticleCategorieRouter } from './categorie-article.routes.js';
+export {
+  adminArticleCategorieRouter,
+  publicArticleCategorieRouter,
+} from './categorie-article.routes.js';
 export { CategorieArticleRepository } from './categorie-article.repository.js';
 export { CategorieArticleService } from './categorie-article.service.js';
 export { CategorieArticleController } from './categorie-article.controller.js';

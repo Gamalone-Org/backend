@@ -63,10 +63,20 @@ export const listArticlesQuerySchema = z
     path: ['dateDebut'],
   });
 
+export const publicListArticlesQuerySchema = z
+  .object({
+    page: pageSchema,
+    limit: limitSchema,
+    categorieId: z.string().uuid('Identifiant de catégorie invalide').optional(),
+    q: z.string().trim().max(255).optional(),
+  })
+  .strict();
+
 export type CreateArticleInput = z.infer<typeof createArticleSchema>;
 export type UpdateArticleInput = z.infer<typeof updateArticleSchema>;
 export type ScheduleArticleInput = z.infer<typeof scheduleArticleSchema>;
 export type ListArticlesQuery = z.infer<typeof listArticlesQuerySchema>;
 export type ArticleStatusType = z.infer<typeof listArticlesQuerySchema>['statut'];
+export type PublicListArticlesQuery = z.infer<typeof publicListArticlesQuerySchema>;
 
 export { slugSchema as articleSlugSchema };

@@ -50,6 +50,17 @@ export const listCategoriesArticleQuerySchema = z
   })
   .strict();
 
+export const publicListCategoriesArticleQuerySchema = z
+  .object({
+    page: pageSchema,
+    limit: limitSchema,
+    q: z.string().trim().max(255).optional(),
+  })
+  .strict();
+
 export type CreateCategorieArticleInput = z.infer<typeof createCategorieArticleSchema>;
 export type UpdateCategorieArticleInput = z.infer<typeof updateCategorieArticleSchema>;
 export type ListCategoriesArticleQuery = z.infer<typeof listCategoriesArticleQuerySchema>;
+export type PublicListCategoriesArticleQuery = z.infer<
+  typeof publicListCategoriesArticleQuerySchema
+>;

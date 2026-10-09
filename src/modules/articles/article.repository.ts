@@ -40,6 +40,38 @@ export type ListArticlesOptions = {
   tri?: 'recent' | 'plus_ancien' | 'titre';
 };
 
+export type ListPublicArticlesOptions = {
+  page: number;
+  limit: number;
+  categorieId?: string;
+  q?: string;
+};
+
+const PUBLIC_ARTICLE_SELECT = {
+  id: true,
+  titre: true,
+  slug: true,
+  metaDescription: true,
+  imageCouvertureUrl: true,
+  datePublication: true,
+  createdAt: true,
+  updatedAt: true,
+  categorie: {
+    select: {
+      id: true,
+      nom: true,
+      slug: true,
+      description: true,
+      imageCouvertureUrl: true,
+    },
+  },
+} satisfies Prisma.ArticleSelect;
+
+const PUBLIC_ARTICLE_DETAIL_SELECT = {
+  ...PUBLIC_ARTICLE_SELECT,
+  contenu: true,
+} satisfies Prisma.ArticleSelect;
+
 export class ArticleRepository {
   private cloudinaryInstance: CloudinaryService | undefined;
 
@@ -128,6 +160,41 @@ export class ArticleRepository {
     ]);
 
     return { items, total, page: options.page, limit: options.limit };
+  }
+
+  async listPublicArticles(options: ListPublicArticlesOptions) {
+    const where = this.buildWhere({
+      page: options.page,
+      limit: options.limit,
+      statut: 'PUBLIE',
+      ...(options.categorieId ? { categorieId: options.categorieId } : {}),
+      ...(options.q ? { q: options.q } : {}),
+    });
+
+    const orderBy: Prisma.ArticleOrderByWithRelationInput[] = [
+      { datePublication: 'desc' },
+      { createdAt: 'desc' },
+    ];
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.article.count({ where }),
+      this.prisma.article.findMany({
+        where,
+        orderBy,
+        skip: (options.page - 1) * options.limit,
+        take: options.limit,
+        select: PUBLIC_ARTICLE_SELECT,
+      }),
+    ]);
+
+    return { items, total, page: options.page, limit: options.limit };
+  }
+
+  findPublicArticleById(id: string) {
+    return this.prisma.article.findFirst({
+      where: { id, statut: 'PUBLIE', deletedAt: null },
+      select: PUBLIC_ARTICLE_DETAIL_SELECT,
+    });
   }
 
   async findForExport(options: ListArticlesOptions, limit: number) {

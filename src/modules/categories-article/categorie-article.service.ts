@@ -124,6 +124,14 @@ export class CategorieArticleService {
     return { ...result, totalPages };
   }
 
+  // --- Consultation publique : uniquement les catégories ACTIVE ---
+
+  async listPublicCategoriesArticle(options: ListCategoriesArticleOptions) {
+    const result = await this.repository.listPublicCategoriesArticle(options);
+    const totalPages = result.total === 0 ? 0 : Math.ceil(result.total / result.limit);
+    return { ...result, totalPages };
+  }
+
   async uploadCategorieArticleImage(
     id: string,
     file: CloudinaryUploadInput,

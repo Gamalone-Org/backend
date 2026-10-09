@@ -69,4 +69,12 @@ adminArticleCategorieRouter.delete(
   controller.deleteImage
 );
 
+/**
+ * Consultation publique des catégories d'articles : aucune authentification.
+ * Seules les catégories ACTIVE sont exposées.
+ */
+export const publicArticleCategorieRouter = Router();
+
+publicArticleCategorieRouter.get('/', controller.listPublic);
+
 export default adminArticleCategorieRouter;
