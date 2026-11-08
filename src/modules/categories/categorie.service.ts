@@ -106,7 +106,8 @@ export class CategorieService {
     if (!categorie) {
       throw new NotFoundError('Catégorie non trouvée');
     }
-    return categorie;
+    const stats = await this.repository.getCategorieStats(id);
+    return { ...categorie, ...stats };
   }
 
   async getPublicCategorie(id: string) {
@@ -114,11 +115,12 @@ export class CategorieService {
     if (!categorie || categorie.statut !== 'ACTIVE') {
       throw new NotFoundError('Catégorie non trouvée');
     }
-    return categorie;
+    const stats = await this.repository.getCategorieStats(id);
+    return { ...categorie, ...stats };
   }
 
   async listCategories(options: ListCategoriesOptions) {
-    const result = await this.repository.listCategories(options);
+    const result = await this.repository.listCategoriesWithStats(options);
     const totalPages = result.total === 0 ? 0 : Math.ceil(result.total / result.limit);
     return { ...result, totalPages };
   }
@@ -146,21 +148,28 @@ export class CategorieService {
       'statut',
       'position',
       'nombre_oeuvres',
+      'nombre_artisans',
       'imageCouvertureUrl',
       'createdAt',
     ];
 
-    const rows = categories.map((c) => [
-      c.id,
-      c.nom,
-      c.description,
-      c.slug,
-      c.statut,
-      c.position,
-      c._count.oeuvres,
-      c.imageCouvertureUrl ?? '',
-      new Date(c.createdAt).toISOString(),
-    ]);
+    const rows = await Promise.all(
+      categories.map(async (c) => {
+        const stats = await this.repository.getCategorieStats(c.id);
+        return [
+          c.id,
+          c.nom,
+          c.description,
+          c.slug,
+          c.statut,
+          c.position,
+          stats.nombreOeuvres,
+          stats.nombreArtisans,
+          c.imageCouvertureUrl ?? '',
+          new Date(c.createdAt).toISOString(),
+        ];
+      })
+    );
 
     const csv = [header, ...rows]
       .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
