@@ -201,7 +201,6 @@ enum PaymentMethod {
 }
 
 enum PaymentProvider {
-  FEDAPAY
   PAYDUNYA
 }
 

@@ -34,8 +34,9 @@ describe('Payment foundations: enums (schema)', () => {
     expect(body.indexOf('COMMANDE')).toBeLessThan(body.indexOf('PREPARATION'));
   });
 
-  it('defines a PaymentProvider enum with FEDAPAY', () => {
-    expect(enumBody('PaymentProvider')).toContain('FEDAPAY');
+  it('defines a PaymentProvider enum with PAYDUNYA', () => {
+    expect(enumBody('PaymentProvider')).toContain('PAYDUNYA');
+    // PAYDUNYA is defined directly in the foundation migration, no separate add-value migration needed
   });
 
   it('defines a PaymentEventTraitementStatus enum for idempotent webhook handling', () => {
@@ -49,10 +50,10 @@ describe('Payment foundations: enums (schema)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Paiement principal (champs FedaPay préparatoires)
+// Paiement principal (champs PayDunya)
 // ---------------------------------------------------------------------------
 
-describe('Paiement model: FedaPay-ready fields', () => {
+describe('Paiement model: PayDunya fields', () => {
   const body = modelBody('Paiement');
 
   it('keeps the existing core fields and the 1-1 link to Commande', () => {
@@ -153,10 +154,10 @@ describe('PaiementEvenement model', () => {
 });
 
 // ---------------------------------------------------------------------------
-// BuyerProfile : ID client FedaPay
+// BuyerProfile : ID client historique
 // ---------------------------------------------------------------------------
 
-describe('BuyerProfile model: FedaPay customer id', () => {
+describe('BuyerProfile model: historical customer id', () => {
   it('adds a nullable unique fedaPayCustomerId', () => {
     const body = modelBody('BuyerProfile');
     expect(body).toMatch(/fedaPayCustomerId\s+String\?\s+@unique/);
@@ -181,11 +182,11 @@ describe('add_payment_foundations migration', () => {
   });
 
   it('creates the payment provider and event status enums', () => {
-    expect(migration).toContain(`CREATE TYPE "PaymentProvider" AS ENUM ('FEDAPAY')`);
+    expect(migration).toContain(`CREATE TYPE "PaymentProvider" AS ENUM ('PAYDUNYA')`);
     expect(migration).toContain('CREATE TYPE "PaymentEventTraitementStatus" AS ENUM');
   });
 
-  it('adds the FedaPay-ready columns and the new tables', () => {
+  it('adds the provider-ready columns and the new tables', () => {
     expect(migration).toContain('"referenceExterne" TEXT');
     expect(migration).toContain('CREATE TABLE "paiement_tentatives"');
     expect(migration).toContain('CREATE TABLE "paiement_evenements"');

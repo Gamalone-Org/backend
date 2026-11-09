@@ -101,7 +101,7 @@ export class PayoutRepository {
       await tx.payoutTentative.create({
         data: {
           payoutId,
-          prestataire: 'FEDAPAY',
+          prestataire: 'PAYDUNYA',
           statut: 'ECHOUE',
           montant,
           devise,
@@ -136,7 +136,7 @@ export class PayoutRepository {
       await tx.payoutTentative.create({
         data: {
           payoutId: data.payoutId,
-          prestataire: 'FEDAPAY',
+          prestataire: 'PAYDUNYA',
           referenceExterne: data.referenceExterne,
           statut: 'EN_TRAITEMENT',
           statutExterne: data.statutExterne,
@@ -150,7 +150,7 @@ export class PayoutRepository {
   }
 
   /**
-   * État distant ambigu après création (démarrage FedaPay incertain). La
+   * État distant ambigu après création (démarrage prestataire incertain). La
    * référence est conservée : aucun second reversement ne doit être créé.
    */
   async markPayoutReconciliation(data: {
@@ -167,7 +167,7 @@ export class PayoutRepository {
       await tx.payout.update({
         where: { id: data.payoutId },
         data: {
-          prestataire: 'FEDAPAY',
+          prestataire: 'PAYDUNYA',
           statut: 'RECONCILIATION_REQUISE',
           referenceExterne: data.referenceExterne,
           statutExterne: data.statutExterne,
@@ -179,7 +179,7 @@ export class PayoutRepository {
       await tx.payoutTentative.create({
         data: {
           payoutId: data.payoutId,
-          prestataire: 'FEDAPAY',
+          prestataire: 'PAYDUNYA',
           referenceExterne: data.referenceExterne,
           statut: 'RECONCILIATION_REQUISE',
           statutExterne: data.statutExterne,
@@ -266,7 +266,7 @@ export class PayoutRepository {
       await tx.payoutTentative.create({
         data: {
           payoutId,
-          prestataire: 'FEDAPAY', // Placeholder for failed local payout
+          prestataire: 'PAYDUNYA', // Placeholder for failed local payout
           statut: 'ECHOUE',
           montant: 0,
           devise: 'XOF',

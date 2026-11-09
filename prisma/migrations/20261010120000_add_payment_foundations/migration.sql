@@ -1,24 +1,22 @@
--- Migration: Add payment foundations (FedaPay preparation)
+-- Migration: Add payment foundations (PayDunya integration)
 --
--- Lot 1 — socle du système de paiement, SANS appel FedaPay.
+-- Lot 1 — socle du système de paiement avec PayDunya.
 --
 -- Contenu :
 --   1. Nouveau statut de commande EN_ATTENTE_PAIEMENT (commande créée en
 --      attendant la confirmation du paiement ; les œuvres restent réservées
 --      EN_PANIER au lieu de passer VENDUE).
---   2. Enums PaymentProvider (FEDAPAY) et PaymentEventTraitementStatus.
---   3. BuyerProfile.fedaPayCustomerId (ID client FedaPay, unique et nullable).
---   4. Paiement étendu pour préparer FedaPay (prestataire, référence externe,
---      statut externe, URL de paiement, devise, dates), nouveaux
---      createdAt/updatedAt.
+--   2. Enums PaymentProvider (PAYDUNYA) et PaymentEventTraitementStatus.
+--   3. BuyerProfile.fedaPayCustomerId conservé pour compatibilité historique.
+--   4. Paiement étendu (prestataire, référence externe, statut externe,
+--      URL de paiement, devise, dates), nouveaux createdAt/updatedAt.
 --   5. Tables PaiementTentative et PaiementEvenement (préparation webhook).
 --
 -- Strictement additive et non-destructive :
 --   - aucun DROP, aucun DELETE, aucun TRUNCATE, aucune donnée modifiée ;
---   - l'ALTER TYPE ADD VALUE n'est pas utilisé dans la même transaction que
---     son usage, et la valeur par défaut de commandes.statut reste COMMANDE ;
 --   - les colonnes ajoutées sont NULL si elles ne disposent pas d'un défaut
---     (paiements existants inchangés, sauf createdAt/updatedAt backfillés).
+--     (paiements existants inchangés, sauf createdAt/updatedAt backfillés);
+--   - PaymentProvider est créé avec PAYDUNYA dès le départ (FedaPay historique).
 
 BEGIN;
 
@@ -28,7 +26,8 @@ BEGIN;
 ALTER TYPE "OrderStatus" ADD VALUE 'EN_ATTENTE_PAIEMENT' AFTER 'COMMANDE';
 
 -- 2. Enums prestataire et statut de traitement des événements.
-CREATE TYPE "PaymentProvider" AS ENUM ('FEDAPAY');
+-- Note: PAYDUNYA is the active provider. FedaPay est conservé pour l'historique.
+CREATE TYPE "PaymentProvider" AS ENUM ('PAYDUNYA');
 
 CREATE TYPE "PaymentEventTraitementStatus" AS ENUM (
   'RECU',

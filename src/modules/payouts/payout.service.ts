@@ -85,9 +85,9 @@ export class PayoutService {
 
   /**
    * Marque un reversement comme EN_TRAITEMENT en local.
-   * Auparavant, cette méthode appelait l'API FedaPay createPayout/startPayout.
+   * Anciennement, cette méthode appelait l'API prestataire createPayout/startPayout.
    * Désormais, elle ne fait qu'un marquage local à des fins de suivi/admin.
-   * Aucun appel réseau vers FedaPay ou PayDunya n'est effectué.
+   * Aucun appel réseau vers un prestataire de paiement n'est effectué.
    */
   async markPayoutEnTraitement(
     payoutId: string,
@@ -150,10 +150,10 @@ export class PayoutService {
   }
 
   /**
-   * Synchronisation locale pour les anciens reversements FedaPay historiques.
-   * N'INITIE JAMAIN de nouvelle transaction : elle ne fait que mettre à jour
+   * Synchronisation locale pour les anciens reversements historiques.
+   * N'INITIE JAMAIS de nouvelle transaction : elle ne fait que mettre à jour
    * le statut local en se basant sur la référence externe existante.
-   * Les reversements sans référence prestataire (manuels) sont refusés.
+   * Les reversements sans référence prestataire (manuels) sont traités localement.
    */
   async synchroniserPayout(payoutId: string): Promise<{ id: string; statut: string; statutExterne: string | null }> {
     const payout = await this.repository.findPayoutById(payoutId);
@@ -168,11 +168,10 @@ export class PayoutService {
       return { id: payout.id, statut: 'VERSE', statutExterne: null };
     }
 
-    // Pour les anciens reversements FedaPay avec référence, on peut essayer de
-    // consulter l'API distante mais en l'échec comme best-effort seulement.
-    // Ici, on refuse toute tentative d'appel externe et on se base sur le statut local.
+    // Pour les anciens reversements historiques avec référence, on refuse toute
+    // tentative d'appel externe et on se base sur le statut local.
     throw new ConflictError(
-      'La synchronisation des anciens reversements FedaPay nécessite une référence externe valide et un accès à l\'API distante, qui est désormais désactivé.'
+      'La synchronisation des anciens reversements historiques nécessite une référence externe valide et un accès à l\'API distante, qui est désormais désactivé.'
     );
   }
 
@@ -500,7 +499,7 @@ export async function markPayoutEnTraitementLocal(
     await tx.payoutTentative.create({
       data: {
         payoutId,
-        prestataire: 'FEDAPAY',
+        prestataire: 'PAYDUNYA',
         referenceExterne,
         statut: 'EN_TRAITEMENT',
         statutExterne,
@@ -555,7 +554,7 @@ export async function markPayoutEchoueLocal(
     await tx.payoutTentative.create({
       data: {
         payoutId,
-        prestataire: 'FEDAPAY',
+        prestataire: 'PAYDUNYA',
         statut: 'ECHOUE',
         montant: 0,
         devise: 'XOF',
