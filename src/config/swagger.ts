@@ -4494,20 +4494,92 @@ export const swaggerDocument = {
     },
 
     // =========================================================================
+    // PAYDUNYA PAYMENTS (Public routes)
+    // =========================================================================
+    '/api/v1/paiements/webhooks/paydunya': {
+      post: {
+        tags: ['Payments'],
+        summary: 'IPN PayDunya (public, application/x-www-form-urlencoded)',
+        description: 'Callback officiel PayDunya. Le champ data.hash est verifie via SHA-512 de la cle principale. Le statut est confirme cote serveur via l\'API PayDunya avant toute transition.',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/x-www-form-urlencoded': {
+              schema: { type: 'object' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'IPN accepte (traite ou ignore de facile idempotente).',
+          },
+          '400': {
+            description: 'Hash ou corps IPN invalide.',
+          },
+          '500': {
+            description: 'PayDunya non configure.',
+          },
+          '502': {
+            description: 'PayDunya indisponible pour la confirmation.',
+          },
+        },
+      },
+    },
+    '/api/v1/paiements/commandes/{id}/initialiser': {
+      post: {
+        tags: ['Payments'],
+        summary: 'Initialiser le paiement PayDunya d\'une commande',
+        description: 'Genere une facture PayDunya et retourne l\'URL de paiement securisee. Remplace l\'ancienne integration FedaPay.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Lien securise de paiement pret a etre ouvert par l\'acheteur.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        url: { type: 'string', description: 'URL de paiement PayDunya' },
+                      },
+                    },
+                  },
+                  required: ['success', 'data'],
+                },
+              },
+            },
+          },
+          '400': { description: 'Identifiant ou donnees acheteur invalides.' },
+          '404': { description: 'Commande introuvable.' },
+          '409': { description: 'Commande ou paiement non payable, ou initialisation deja en cours.' },
+          '500': { description: 'PayDunya non configure (clees manquantes).' },
+          '502': { description: 'PayDunya indisponible ou reponse invalide.' },
+        },
+      },
+    },
+
+    // =========================================================================
     // ADMIN PAYMENTS
     // =========================================================================
     '/api/v1/admin/paiements': {
       get: {
         tags: ['Admin Payments'],
         summary: 'Lister les paiements (back-office)',
-        description: 'Liste paginée des paiements, tous statuts confondus. Filtres : statut, anomalie de réconciliation (reconciliationRequise), recherche libre (q : référence de transaction, ou identifiant de commande si UUID) et plage de dates sur la date de création. Niveau SUPPORT minimum.',
+        description: 'Liste paginee des paiements, tous statuts confondus. Filtres : statut, anomalie de reconciliation (reconciliationRequise), recherche libre (q : reference de transaction, ou identifiant de commande si UUID) et plage de dates sur la date de creation. Niveau SUPPORT minimum.',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
           { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } },
           { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['EN_ATTENTE', 'EN_COURS', 'REUSSI', 'ECHOUE', 'REMBOURSE'] } },
           { name: 'reconciliationRequise', in: 'query', required: false, schema: { type: 'boolean' } },
-          { name: 'q', in: 'query', required: false, description: 'Référence de transaction, ou UUID de commande.', schema: { type: 'string' } },
+          { name: 'q', in: 'query', required: false, description: 'Reference de transaction, ou UUID de commande.', schema: { type: 'string' } },
           { name: 'dateFrom', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
           { name: 'dateTo', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
         ],
