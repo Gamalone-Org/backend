@@ -1,5 +1,5 @@
 -- Migration additive : reversements manuels groupés par artisan.
--- N'altère ni ne supprime aucune table existante (payouts, encaissements FedaPay).
+-- N'altère ni ne supprime aucune table existante (payouts, anciens reversements).
 
 -- CreateEnum
 CREATE TYPE "PayoutBatchStatus" AS ENUM ('EN_ATTENTE', 'VERSE', 'ANNULE');

@@ -4638,14 +4638,14 @@ export const swaggerDocument = {
       post: {
         tags: ['Admin Reversements'],
         summary: 'Déclencher le reversement d\'une sous-commande artisan (désactivé)',
-        description: 'Les reversements automatiques FedaPay ne sont plus disponibles. Utilisez les reversements manuels groupés (/api/v1/admin/reversements-groupes). Retourne 410 Gone. Réservé au SUPER_ADMIN.',
+        description: 'Les reversements automatiques prestataire ne sont plus disponibles. Utilisez les reversements manuels groupés (/api/v1/admin/reversements-groupes). Retourne 410 Gone. Réservé au SUPER_ADMIN.',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'commandeArtisanId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
         ],
         responses: {
           '410': {
-            description: 'Reversements automatiques FedaPay désactivés',
+            description: 'Reversements automatiques prestataire désactivés',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/PayoutAutomaticDisabledResponse' },
@@ -4661,14 +4661,14 @@ export const swaggerDocument = {
       post: {
         tags: ['Admin Reversements'],
         summary: 'Relancer un reversement échoué (désactivé)',
-        description: 'Les reversements automatiques FedaPay ne sont plus disponibles. Utilisez les reversements manuels groupés. Retourne 410 Gone. Réservé au SUPER_ADMIN.',
+        description: 'Les reversements automatiques prestataire ne sont plus disponibles. Utilisez les reversements manuels groupés. Retourne 410 Gone. Réservé au SUPER_ADMIN.',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
         ],
         responses: {
           '410': {
-            description: 'Reversements automatiques FedaPay désactivés',
+            description: 'Reversements automatiques prestataire désactivés',
             content: {
               'application/json': {
                 schema: { $ref: '#/components/schemas/PayoutAutomaticDisabledResponse' },
@@ -4684,7 +4684,7 @@ export const swaggerDocument = {
       post: {
         tags: ['Admin Reversements'],
         summary: 'Synchroniser le statut d\'un reversement',
-        description: 'Récupère l\'état réel chez FedaPay et l\'applique localement pour les anciens reversements historiques. N\'initie jamais de nouvelle transaction. Pour les reversements manuels (sans référence prestataire), marque comme VERSE localement. Réservé au SUPER_ADMIN.',
+        description: 'Récupère l\'état réel chez le prestataire et l\'applique localement pour les anciens reversements historiques. N\'initie jamais de nouvelle transaction. Pour les reversements manuels (sans référence prestataire), marque comme VERSE localement. Réservé au SUPER_ADMIN.',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },

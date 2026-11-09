@@ -51,7 +51,7 @@ export class PaymentRepository {
    * peut passer `EN_ATTENTE`/`ECHOUE` → `EN_COURS` (mise à jour conditionnelle
    * mono-`UPDATE`, donc mono-gagnant). Toute valeur déjà `EN_COURS` ou portant
    * une référence distante est exclue : on ne crée jamais une deuxième
-   * transaction FedaPay pour un paiement qui en a peut-être déjà une.
+   * transaction PayDunya pour un paiement qui en a peut-être déjà une.
    */
   async claimInitialization(paiementId: string): Promise<boolean> {
     const result = await this.prisma.paiement.updateMany({
@@ -67,7 +67,7 @@ export class PaymentRepository {
   }
 
   /**
-   * Annule une réservation lorsque l'initialisation FedaPay a échoué AVANT
+   * Annule une réservation lorsque l'initialisation PayDunya a échoué AVANT
    * toute création distante (aucune référence). Si une référence existe déjà,
    * la libération est refusée : la transaction distante ne doit jamais être
    * considérée comme inexistante.
@@ -80,7 +80,7 @@ export class PaymentRepository {
   }
 
   /**
-   * Enregistre la référence d'une transaction FedaPay SANS passer par la
+   * Enregistre la référence d'une transaction PayDunya SANS passer par la
    * création d'une tentative. Utilisé en secours lorsque la persistance de la
    * tentative échoue, afin de conserver l'identifiant distant pour la
    * réconciliation et d'empêcher une recréation aveugle.
@@ -94,7 +94,7 @@ export class PaymentRepository {
     await this.prisma.paiement.update({
       where: { id: data.paiementId },
       data: {
-        prestataire: 'FEDAPAY',
+        prestataire: 'PAYDUNYA',
         referenceExterne: data.referenceExterne,
         statutExterne: data.statutExterne,
         urlPaiement: data.urlPaiement,
@@ -117,7 +117,7 @@ export class PaymentRepository {
       const attempt = await tx.paiementTentative.create({
         data: {
           paiementId: data.paiementId,
-          prestataire: 'FEDAPAY',
+          prestataire: 'PAYDUNYA',
           referenceExterne: data.referenceExterne,
           statut: 'EN_ATTENTE',
           statutExterne: data.statutExterne,
@@ -132,7 +132,7 @@ export class PaymentRepository {
       await tx.paiement.update({
         where: { id: data.paiementId },
         data: {
-          prestataire: 'FEDAPAY',
+          prestataire: 'PAYDUNYA',
           referenceExterne: data.referenceExterne,
           statutExterne: data.statutExterne,
           urlPaiement: data.urlPaiement,
@@ -147,7 +147,7 @@ export class PaymentRepository {
   }
 
   // ---------------------------------------------------------------------------
-  // Webhooks FedaPay (Lot 3)
+  // Webhooks PayDunya
   // ---------------------------------------------------------------------------
 
   /**
@@ -229,7 +229,7 @@ export class PaymentRepository {
     try {
       const event = await this.prisma.paiementEvenement.create({
         data: {
-          prestataire: 'FEDAPAY',
+          prestataire: 'PAYDUNYA',
           referenceEvenement: data.referenceEvenement,
           typeEvenement: data.typeEvenement,
           referenceTransaction: data.referenceTransaction,
@@ -300,7 +300,7 @@ export class PaymentRepository {
       await tx.paiement.updateMany({
         where: { id: data.paiementId, statut: { in: ['EN_ATTENTE', 'EN_COURS', 'ECHOUE'] } },
         data: {
-          prestataire: 'FEDAPAY',
+          prestataire: 'PAYDUNYA',
           statut: 'REUSSI',
           statutExterne: data.statutExterne,
           referenceExterne: data.referenceExterne,
@@ -398,7 +398,7 @@ export class PaymentRepository {
   }
 
   /**
-   * Enregistre un remboursement confirmé par FedaPay. Aucune API de
+   * Enregistre un remboursement confirmé par le prestataire. Aucune API de
    * remboursement n'est déclenchée ici : on ne fait que refléter l'état réel
    * (paiement remboursé, commande remboursée, œuvres remises au catalogue).
    */
