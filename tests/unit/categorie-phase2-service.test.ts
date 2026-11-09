@@ -10,6 +10,8 @@ function buildService(overrides: Record<string, unknown> = {}) {
     countOeuvresByCategorie: vi.fn(),
     countSousCategoriesByCategorie: vi.fn(),
     listCategories: vi.fn(),
+    listCategoriesWithStats: vi.fn(),
+    getCategorieStats: vi.fn().mockResolvedValue({ nombreOeuvres: 0, nombreArtisans: 0 }),
     createCategorie: vi.fn(),
     updateCategorie: vi.fn(),
     deleteCategorie: vi.fn(),
@@ -36,7 +38,7 @@ describe('Phase 2 — CategorieService', () => {
   describe('totalPages', () => {
     it('calcule totalPages = ceil(total / limit)', async () => {
       const { service, repository } = buildService();
-      repository.listCategories.mockResolvedValue({ items: [], total: 21, page: 2, limit: 10 });
+      repository.listCategoriesWithStats.mockResolvedValue({ items: [], total: 21, page: 2, limit: 10 });
 
       const result = await service.listCategories({ page: 2, limit: 10 });
 
@@ -48,7 +50,7 @@ describe('Phase 2 — CategorieService', () => {
 
     it('retourne totalPages = 0 quand total = 0', async () => {
       const { service, repository } = buildService();
-      repository.listCategories.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 });
+      repository.listCategoriesWithStats.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 });
 
       const result = await service.listCategories({ page: 1, limit: 20 });
 
@@ -59,11 +61,11 @@ describe('Phase 2 — CategorieService', () => {
   describe('visibilité publique ACTIVE', () => {
     it('listPublicCategories force statut ACTIVE', async () => {
       const { service, repository } = buildService();
-      repository.listCategories.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 });
+      repository.listCategoriesWithStats.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 });
 
       await service.listPublicCategories({ page: 1, limit: 20, q: 'sculp' });
 
-      expect(repository.listCategories).toHaveBeenCalledWith({
+      expect(repository.listCategoriesWithStats).toHaveBeenCalledWith({
         page: 1,
         limit: 20,
         q: 'sculp',
@@ -74,10 +76,13 @@ describe('Phase 2 — CategorieService', () => {
     it('getPublicCategorie retourne une catégorie ACTIVE', async () => {
       const { service, repository } = buildService();
       repository.findCategorieById.mockResolvedValue({ id: 'cat-1', statut: 'ACTIVE' });
+      repository.getCategorieStats.mockResolvedValue({ nombreOeuvres: 0, nombreArtisans: 0 });
 
       const result = await service.getPublicCategorie('cat-1');
 
       expect(result.statut).toBe('ACTIVE');
+      expect(result.nombreOeuvres).toBe(0);
+      expect(result.nombreArtisans).toBe(0);
     });
 
     it('getPublicCategorie lève NotFound pour une catégorie INACTIVE', async () => {
@@ -94,7 +99,7 @@ describe('Phase 2 — CategorieService', () => {
       await expect(service.getPublicCategorie('missing')).rejects.toThrow(NotFoundError);
     });
 
-    it('listPublicSousCategories ne renvoie que les sous-catégories ACTIVE d’une catégorie ACTIVE', async () => {
+    it('listPublicSousCategories ACTIVE', async () => {
       const { service, repository } = buildService();
       repository.findCategorieById.mockResolvedValue({ id: 'cat-1', statut: 'ACTIVE' });
       repository.listSousCategoriesByCategorie.mockResolvedValue([{ id: 'sc-1' }, { id: 'sc-2' }]);
@@ -122,7 +127,7 @@ describe('Phase 2 — CategorieService', () => {
   });
 
   describe('cohérence categorieId des sous-catégories', () => {
-    it('updateSousCategorie lève NotFound quand la sous-catégorie n’appartient pas au categorieId', async () => {
+    it('updateSousCategorie lève NotFound quand la sous-catégorie n\'appartient pas au categorieId', async () => {
       const { service, repository } = buildService();
       repository.findSousCategorieById.mockResolvedValue({ id: 'sc-1', categorieId: 'cat-1', slug: 'x' });
 
@@ -194,26 +199,29 @@ describe('Phase 2 — CategorieService', () => {
       expect(CSV_EXPORT_LIMIT).toBe(5000);
     });
 
-    it('génère le CSV avec l’en-tête attendu, le nombre d’œuvres et l’échappement', async () => {
+    it('génère le CSV avec l\'en-tête attendu, le nombre d\'œuvres et l\'échappement', async () => {
       const { service, repository } = buildService();
       repository.findForExport.mockResolvedValue([fake]);
+      repository.getCategorieStats.mockResolvedValue({ nombreOeuvres: 12, nombreArtisans: 3 });
 
       const csv = await service.exportCsv({});
 
       const lines = csv.split('\n');
       expect(lines[0]).toBe(
-        '"id","nom","description","slug","statut","position","nombre_oeuvres","imageCouvertureUrl","createdAt"'
+        '"id","nom","description","slug","statut","position","nombre_oeuvres","nombre_artisans","imageCouvertureUrl","createdAt"'
       );
       expect(csv).toContain('"Art, ""bois"" & pierre"');
       expect(csv).toContain('"12"');
+      expect(csv).toContain('"3"');
       expect(csv).toContain('"2026-01-01T00:00:00.000Z"');
     });
 
-    it('n’expose pas imageCouverturePublicId dans le CSV', async () => {
+    it('n\'expose pas imageCouverturePublicId dans le CSV', async () => {
       const { service, repository } = buildService();
       repository.findForExport.mockResolvedValue([
         { ...fake, imageCouverturePublicId: 'pub-secret' },
       ]);
+      repository.getCategorieStats.mockResolvedValue({ nombreOeuvres: 12, nombreArtisans: 3 });
 
       const csv = await service.exportCsv({});
 
@@ -224,6 +232,7 @@ describe('Phase 2 — CategorieService', () => {
     it('rend une cellule vide pour imageCouvertureUrl absente', async () => {
       const { service, repository } = buildService();
       repository.findForExport.mockResolvedValue([{ ...fake, imageCouvertureUrl: null }]);
+      repository.getCategorieStats.mockResolvedValue({ nombreOeuvres: 12, nombreArtisans: 3 });
 
       const csv = await service.exportCsv({});
       const row = csv.split('\n')[1];

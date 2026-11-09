@@ -19,6 +19,8 @@ function buildService(overrides: Partial<CategorieRepository> = {}) {
     countOeuvresByCategorie: vi.fn(),
     countSousCategoriesByCategorie: vi.fn(),
     listCategories: vi.fn(),
+    listCategoriesWithStats: vi.fn(),
+    getCategorieStats: vi.fn().mockResolvedValue({ nombreOeuvres: 0, nombreArtisans: 0 }),
     createCategorie: vi.fn(),
     updateCategorie: vi.fn(),
     deleteCategorie: vi.fn(),
@@ -261,7 +263,7 @@ describe('CategorieService', () => {
 
   it('lists categories with pagination and filters', async () => {
     const { service, repository } = buildService();
-    repository.listCategories.mockResolvedValue({
+    repository.listCategoriesWithStats.mockResolvedValue({
       items: [],
       total: 0,
       page: 1,
@@ -270,7 +272,7 @@ describe('CategorieService', () => {
 
     await service.listCategories({ page: 1, limit: 20, statut: 'ACTIVE', q: 'sculp' });
 
-    expect(repository.listCategories).toHaveBeenCalledWith({
+    expect(repository.listCategoriesWithStats).toHaveBeenCalledWith({
       page: 1,
       limit: 20,
       statut: 'ACTIVE',
