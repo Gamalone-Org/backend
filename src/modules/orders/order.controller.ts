@@ -48,6 +48,16 @@ export class OrderController {
     }
   };
 
+  confirmerReception = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = commandeIdParamsSchema.parse(req.params);
+      const result = await this.orderService.confirmerReception(req.user!.id, id);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   listAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const query = adminCommandesQuerySchema.parse(req.query);

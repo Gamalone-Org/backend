@@ -21,6 +21,9 @@ const tags = [
   { name: 'Admin Administrateurs', description: 'Admin management of administrator accounts' },
   { name: 'Admin Dashboard', description: 'Admin dashboard statistics and overview' },
   { name: 'Admin Artisans', description: 'Admin artisan profile management' },
+  { name: 'Admin Payments', description: 'Admin payment management (back-office)' },
+  { name: 'Admin Reversements', description: 'Admin individual payout management (back-office)' },
+  { name: 'Admin Reversements Groupes', description: 'Admin batched payout management (back-office)' },
   { name: 'Commandes', description: 'Client order management' },
   {
     name: 'Articles',
@@ -36,6 +39,7 @@ const tags = [
   { name: 'Favoris', description: 'Mes favoris acheteur (Espace Acheteur)' },
   { name: 'Acheteur', description: 'Espace Acheteur : paramètres et préférences' },
   { name: 'Health', description: 'System health endpoints' },
+  { name: 'Artisan Profil', description: 'Artisan profile management (private, artisan only)' },
 ];
 
 export const swaggerOptions = {
@@ -2380,17 +2384,7 @@ export const swaggerDocument = {
             description: 'Paginated list of ACTIVE categories',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    success: { type: 'boolean' },
-                    items: { type: 'array', items: { type: 'object' } },
-                    total: { type: 'integer' },
-                    page: { type: 'integer' },
-                    limit: { type: 'integer' },
-                    totalPages: { type: 'integer' },
-                  },
-                },
+                schema: { $ref: '#/components/schemas/PublicCategorieListResponse' },
               },
             },
           },
@@ -2409,7 +2403,7 @@ export const swaggerDocument = {
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
         ],
         responses: {
-          '200': { description: 'Category details' },
+          '200': { description: 'Category details', content: { 'application/json': { schema: { $ref: '#/components/schemas/PublicCategorieDetailResponse' } } } },
           '400': { description: 'Invalid category id' },
           '404': { description: 'Category not found or not ACTIVE' },
         },
@@ -2443,17 +2437,7 @@ export const swaggerDocument = {
             description: 'Paginated list of categories (including INACTIVE)',
             content: {
               'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    success: { type: 'boolean' },
-                    items: { type: 'array', items: { type: 'object' } },
-                    total: { type: 'integer' },
-                    page: { type: 'integer' },
-                    limit: { type: 'integer' },
-                    totalPages: { type: 'integer' },
-                  },
-                },
+                schema: { $ref: '#/components/schemas/AdminCategorieListResponse' },
               },
             },
           },
@@ -2537,7 +2521,7 @@ export const swaggerDocument = {
           { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
         ],
         responses: {
-          '200': { description: 'Category details (including INACTIVE)' },
+          '200': { description: 'Category details (including INACTIVE)', content: { 'application/json': { schema: { $ref: '#/components/schemas/AdminCategorieDetailResponse' } } } },
           '400': { description: 'Invalid category id' },
           '401': { description: 'Authentication required' },
           '403': { description: 'Forbidden: insufficient admin level' },
@@ -2660,7 +2644,7 @@ export const swaggerDocument = {
           },
         ],
         responses: {
-          '200': { description: 'List of ACTIVE sous-categories' },
+          '200': { description: 'List of ACTIVE sous-categories', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, items: { type: 'array', items: { $ref: '#/components/schemas/SousCategoriePublic' } } }, required: ['success', 'items'] } } } },
           '400': { description: 'Invalid category id' },
           '404': { description: 'Category not found or not ACTIVE' },
         },
@@ -4013,7 +3997,7 @@ export const swaggerDocument = {
         },
       },
     },
-    '/api/v1/artisan/profil/atelier/photos/{photoId}': {
+    '/api/v1/artisan/profil/atelier/photos/{id}': {
       delete: {
         tags: ['Artisans'],
         summary: 'Delete an atelier photo',
@@ -4508,6 +4492,403 @@ export const swaggerDocument = {
         },
       },
     },
+
+    // =========================================================================
+    // ADMIN PAYMENTS
+    // =========================================================================
+    '/api/v1/admin/paiements': {
+      get: {
+        tags: ['Admin Payments'],
+        summary: 'Lister les paiements (back-office)',
+        description: 'Liste paginée des paiements, tous statuts confondus. Filtres : statut, anomalie de réconciliation (reconciliationRequise), recherche libre (q : référence de transaction, ou identifiant de commande si UUID) et plage de dates sur la date de création. Niveau SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } },
+          { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['EN_ATTENTE', 'EN_COURS', 'REUSSI', 'ECHOUE', 'REMBOURSE'] } },
+          { name: 'reconciliationRequise', in: 'query', required: false, schema: { type: 'boolean' } },
+          { name: 'q', in: 'query', required: false, description: 'Référence de transaction, ou UUID de commande.', schema: { type: 'string' } },
+          { name: 'dateFrom', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'dateTo', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Liste paginée des paiements',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminPaymentListResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/paiements/{id}': {
+      get: {
+        tags: ['Admin Payments'],
+        summary: 'Détail d\'un paiement (back-office)',
+        description: 'Détail d\'un paiement : contexte commande/acheteur, historique des tentatives et des événements prestataire. Les diagnostics sensibles sont nettoyés avant exposition. Niveau SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Détail du paiement',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminPaymentDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid payment id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Payment not found' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // ADMIN REVERSEMENTS INDIVIDUELS
+    // =========================================================================
+    '/api/v1/admin/reversements': {
+      get: {
+        tags: ['Admin Reversements'],
+        summary: 'Lister les reversements artisans',
+        description: 'Liste paginée des reversements. Filtres : statut, artisanId, commandeId, recherche libre (q : référence prestataire, ou UUID de commande / sous-commande) et plage de dates sur la date de création. Niveau SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } },
+          { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['EN_ATTENTE', 'EN_TRAITEMENT', 'VERSE', 'ECHOUE', 'RECONCILIATION_REQUISE'] } },
+          { name: 'q', in: 'query', required: false, description: 'Référence prestataire, ou UUID de commande / sous-commande.', schema: { type: 'string' } },
+          { name: 'dateFrom', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'dateTo', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Liste paginée des reversements',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminPayoutListResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/reversements/a-effectuer': {
+      get: {
+        tags: ['Admin Reversements'],
+        summary: 'Lister les reversements à effectuer (éligibles)',
+        description: 'Sous-commandes artisan éligibles à un reversement (livrées, payées, réception confirmée, sans reversement existant). Le délai de 72 h est informatif (dateEcheance, delaiExpire) et ne bloque pas le déclenchement. Niveau SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } },
+        ],
+        responses: {
+          '200': {
+            description: 'Liste paginée des sous-commandes éligibles avec détail éligibilité',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminPayoutEligibleListResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/reversements/{id}': {
+      get: {
+        tags: ['Admin Reversements'],
+        summary: 'Détail d\'un reversement',
+        description: 'Détail d\'un reversement : montants, destination masquée, historique des tentatives. Les coordonnées bénéficiaires brutes ne sont jamais exposées. Niveau SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Détail du reversement',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminPayoutDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid payout id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Payout not found' },
+        },
+      },
+    },
+    '/api/v1/admin/reversements/artisans/{commandeArtisanId}/declencher': {
+      post: {
+        tags: ['Admin Reversements'],
+        summary: 'Déclencher le reversement d\'une sous-commande artisan (désactivé)',
+        description: 'Les reversements automatiques FedaPay ne sont plus disponibles. Utilisez les reversements manuels groupés (/api/v1/admin/reversements-groupes). Retourne 410 Gone. Réservé au SUPER_ADMIN.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'commandeArtisanId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '410': {
+            description: 'Reversements automatiques FedaPay désactivés',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/PayoutAutomaticDisabledResponse' },
+              },
+            },
+          },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN required' },
+        },
+      },
+    },
+    '/api/v1/admin/reversements/{id}/relancer': {
+      post: {
+        tags: ['Admin Reversements'],
+        summary: 'Relancer un reversement échoué (désactivé)',
+        description: 'Les reversements automatiques FedaPay ne sont plus disponibles. Utilisez les reversements manuels groupés. Retourne 410 Gone. Réservé au SUPER_ADMIN.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '410': {
+            description: 'Reversements automatiques FedaPay désactivés',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/PayoutAutomaticDisabledResponse' },
+              },
+            },
+          },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN required' },
+        },
+      },
+    },
+    '/api/v1/admin/reversements/{id}/synchroniser': {
+      post: {
+        tags: ['Admin Reversements'],
+        summary: 'Synchroniser le statut d\'un reversement',
+        description: 'Récupère l\'état réel chez FedaPay et l\'applique localement pour les anciens reversements historiques. N\'initie jamais de nouvelle transaction. Pour les reversements manuels (sans référence prestataire), marque comme VERSE localement. Réservé au SUPER_ADMIN.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Statut synchronisé',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/PayoutSyncResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid payout id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN required' },
+          '404': { description: 'Payout not found' },
+          '409': { description: 'Conflit : référence externe invalide ou synchronisation impossible' },
+        },
+      },
+    },
+
+    // =========================================================================
+    // ADMIN REVERSEMENTS GROUPES (BATCH)
+    // =========================================================================
+    '/api/v1/admin/reversements-groupes': {
+      get: {
+        tags: ['Admin Reversements Groupes'],
+        summary: 'Lister les reversements groupés',
+        description: 'Liste paginée des reversements groupés. Filtres : statut, artisanId, plage de dates sur datePreparation. Niveau SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } },
+          { name: 'statut', in: 'query', required: false, schema: { type: 'string', enum: ['EN_ATTENTE', 'VERSE', 'ANNULE'] } },
+          { name: 'artisanId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'dateFrom', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+          { name: 'dateTo', in: 'query', required: false, schema: { type: 'string', format: 'date-time' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Liste paginée des reversements groupés',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminPayoutBatchListResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/reversements-groupes/eligibles': {
+      get: {
+        tags: ['Admin Reversements Groupes'],
+        summary: 'Lister les sous-commandes éligibles au reversement groupé (par artisan)',
+        description: 'Sous-commandes artisan éligibles à un reversement manuel groupé, regroupées par artisan. Chaque groupe indique le montant net total et le détail par commande (brut, commission, net, motifs de blocage). La pagination porte sur les artisans. Niveau SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', required: false, schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 50, default: 20 } },
+          { name: 'artisanId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Artisans avec leurs commandes éligibles et montants nets',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminPayoutBatchEligibleResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid query parameters' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+        },
+      },
+    },
+    '/api/v1/admin/reversements-groupes/{id}': {
+      get: {
+        tags: ['Admin Reversements Groupes'],
+        summary: 'Détail d\'un reversement groupé',
+        description: 'Détail d\'un reversement groupé : artisan, lignes (commandes avec montants brut/commission/net), annulations éventuelles. Niveau SUPPORT minimum.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Détail du reversement groupé',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AdminPayoutBatchDetailResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid batch id' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: admin access required' },
+          '404': { description: 'Batch not found' },
+        },
+      },
+    },
+    '/api/v1/admin/reversements-groupes/preparer': {
+      post: {
+        tags: ['Admin Reversements Groupes'],
+        summary: 'Préparer un reversement groupé',
+        description: 'Crée un reversement groupé en attente pour un artisan avec les commandes sélectionnées. Vérifie l\'éligibilité de chaque commande, l\'unicité de l\'artisan et l\'absence de réservation conflictuelle. Réservé au SUPER_ADMIN.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/PayoutBatchPrepareRequest' },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Reversement groupé préparé',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/PayoutBatchPrepareResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN required' },
+          '404': { description: 'Sous-commande introuvable' },
+          '409': { description: 'Conflit : artisan différent, commande déjà reversée ou réservée, ou non éligible' },
+        },
+      },
+    },
+    '/api/v1/admin/reversements-groupes/{id}/confirmer': {
+      post: {
+        tags: ['Admin Reversements Groupes'],
+        summary: 'Confirmer un reversement groupé',
+        description: 'Confirme le reversement groupé en fournissant le moyen de paiement et la référence de transfert. Passe le statut à VERSE. Réservé au SUPER_ADMIN.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/PayoutBatchConfirmRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Reversement groupé confirmé',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/PayoutBatchConfirmResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN required' },
+          '404': { description: 'Batch not found' },
+          '409': { description: 'Batch déjà confirmé ou annulé, ou date dans le futur' },
+        },
+      },
+    },
+    '/api/v1/admin/reversements-groupes/{id}/annuler': {
+      post: {
+        tags: ['Admin Reversements Groupes'],
+        summary: 'Annuler un reversement groupé',
+        description: 'Annule un reversement groupé en attente avec motif. Libère les réservations sur les commandes. Réservé au SUPER_ADMIN.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/PayoutBatchCancelRequest' },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Reversement groupé annulé',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/PayoutBatchCancelResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid payload' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Forbidden: SUPER_ADMIN required' },
+          '404': { description: 'Batch not found' },
+          '409': { description: 'Batch déjà confirmé ou annulé' },
+        },
+      },
+    },
   },
   components: {
     securitySchemes: {
@@ -4559,6 +4940,114 @@ export const swaggerDocument = {
           updatedAt: { type: 'string', format: 'date-time' },
           categorie: { $ref: '#/components/schemas/PublicArticleCategorie' },
         },
+      },
+
+      // =========================================================================
+      // PRODUCT CATEGORIES (Categorie) - schemas with stats
+      // =========================================================================
+      SousCategoriePublic: {
+        type: 'object',
+        description: 'Sous-catégorie de produit exposée publiquement (statut ACTIVE uniquement).',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nom: { type: 'string' },
+          slug: { type: 'string' },
+          description: { type: 'string', nullable: true },
+          imageCouvertureUrl: { type: 'string', nullable: true },
+          position: { type: 'integer' },
+        },
+      },
+      PublicCategorie: {
+        type: 'object',
+        description: 'Catégorie de produit exposée publiquement (statut ACTIVE uniquement). Inclut les statistiques nombreOeuvres et nombreArtisans.',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nom: { type: 'string', example: 'Sculpture' },
+          slug: { type: 'string', example: 'sculpture' },
+          description: { type: 'string', nullable: true },
+          imageCouvertureUrl: { type: 'string', nullable: true },
+          position: { type: 'integer' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          nombreOeuvres: { type: 'integer', description: 'Nombre d\'œuvres PUBLIEE dans cette catégorie' },
+          nombreArtisans: { type: 'integer', description: 'Nombre d\'artisans validés (validatedAt != null) ayant au moins une œuvre PUBLIEE dans cette catégorie' },
+          sousCategories: { type: 'array', items: { $ref: '#/components/schemas/SousCategoriePublic' } },
+        },
+      },
+      CategorieAdminItem: {
+        type: 'object',
+        description: 'Catégorie de produit pour l\'admin (ACTIVE ou INACTIVE). Inclut les statistiques nombreOeuvres et nombreArtisans.',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nom: { type: 'string', example: 'Sculpture' },
+          slug: { type: 'string', example: 'sculpture' },
+          description: { type: 'string', nullable: true },
+          imageCouvertureUrl: { type: 'string', nullable: true },
+          imageCouverturePublicId: { type: 'string', nullable: true },
+          statut: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+          position: { type: 'integer' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          nombreOeuvres: { type: 'integer', description: 'Nombre d\'œuvres PUBLIEE dans cette catégorie' },
+          nombreArtisans: { type: 'integer', description: 'Nombre d\'artisans validés (validatedAt != null) ayant au moins une œuvre PUBLIEE dans cette catégorie' },
+          sousCategories: { type: 'array', items: { $ref: '#/components/schemas/SousCategorieAdmin' } },
+        },
+      },
+      SousCategorieAdmin: {
+        type: 'object',
+        description: 'Sous-catégorie de produit pour l\'admin (ACTIVE ou INACTIVE).',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nom: { type: 'string' },
+          slug: { type: 'string' },
+          description: { type: 'string', nullable: true },
+          imageCouvertureUrl: { type: 'string', nullable: true },
+          imageCouverturePublicId: { type: 'string', nullable: true },
+          statut: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+          position: { type: 'integer' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      PublicCategorieListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          items: { type: 'array', items: { $ref: '#/components/schemas/PublicCategorie' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
+        },
+        required: ['success', 'items', 'total', 'page', 'limit', 'totalPages'],
+      },
+      PublicCategorieDetailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          categorie: { $ref: '#/components/schemas/PublicCategorie' },
+        },
+        required: ['success', 'categorie'],
+      },
+      AdminCategorieListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          items: { type: 'array', items: { $ref: '#/components/schemas/CategorieAdminItem' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
+        },
+        required: ['success', 'items', 'total', 'page', 'limit', 'totalPages'],
+      },
+      AdminCategorieDetailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          categorie: { $ref: '#/components/schemas/CategorieAdminItem' },
+        },
+        required: ['success', 'categorie'],
       },
       KycSubmissionRequest: {
         type: 'object',
@@ -6050,6 +6539,919 @@ export const swaggerDocument = {
           page: { type: 'integer' },
           limit: { type: 'integer' },
         },
+      },
+
+      // =========================================================================
+      // ADMIN PAYMENTS
+      // =========================================================================
+      AdminPaymentListItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          statut: { type: 'string', enum: ['EN_ATTENTE', 'EN_COURS', 'REUSSI', 'ECHOUE', 'REMBOURSE'] },
+          methode: { type: 'string' },
+          montant: { type: 'number' },
+          devise: { type: 'string' },
+          prestataire: { type: 'string', nullable: true },
+          referenceExterne: { type: 'string', nullable: true },
+          statutExterne: { type: 'string', nullable: true },
+          reconciliationRequise: { type: 'boolean' },
+          dateInitialisation: { type: 'string', format: 'date-time', nullable: true },
+          dateConfirmation: { type: 'string', format: 'date-time', nullable: true },
+          datePaiementEffectif: { type: 'string', format: 'date-time', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          commande: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              dateCreation: { type: 'string', format: 'date-time' },
+              statut: { type: 'string' },
+              montantTotal: { type: 'number' },
+              acheteur: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  user: { type: 'object', properties: { nom: { type: 'string', nullable: true }, telephone: { type: 'string' } } },
+                },
+              },
+            },
+          },
+          _count: { type: 'object', properties: { tentatives: { type: 'integer' } } },
+        },
+      },
+      AdminPaymentListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          items: { type: 'array', items: { $ref: '#/components/schemas/AdminPaymentListItem' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
+        },
+        required: ['success', 'items', 'total', 'page', 'limit', 'totalPages'],
+      },
+      AdminPaymentDetail: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          statut: { type: 'string', enum: ['EN_ATTENTE', 'EN_COURS', 'REUSSI', 'ECHOUE', 'REMBOURSE'] },
+          methode: { type: 'string' },
+          montant: { type: 'number' },
+          devise: { type: 'string' },
+          prestataire: { type: 'string', nullable: true },
+          referenceExterne: { type: 'string', nullable: true },
+          statutExterne: { type: 'string', nullable: true },
+          reconciliationRequise: { type: 'boolean' },
+          dateInitialisation: { type: 'string', format: 'date-time', nullable: true },
+          dateConfirmation: { type: 'string', format: 'date-time', nullable: true },
+          datePaiementEffectif: { type: 'string', format: 'date-time', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          tentatives: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                prestataire: { type: 'string' },
+                referenceExterne: { type: 'string', nullable: true },
+                statut: { type: 'string' },
+                statutExterne: { type: 'string', nullable: true },
+                montant: { type: 'number' },
+                devise: { type: 'string' },
+                deviseExterneId: { type: 'string', nullable: true },
+                urlPaiement: { type: 'string', nullable: true },
+                dateCreation: { type: 'string', format: 'date-time' },
+                dateExpiration: { type: 'string', format: 'date-time', nullable: true },
+                dateReussite: { type: 'string', format: 'date-time', nullable: true },
+              },
+            },
+          },
+          evenements: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                typeEvenement: { type: 'string' },
+                referenceTransaction: { type: 'string' },
+                statutTraitement: { type: 'string' },
+                dateReception: { type: 'string', format: 'date-time' },
+                dateTraitement: { type: 'string', format: 'date-time', nullable: true },
+                erreur: { type: 'object', nullable: true, additionalProperties: true },
+              },
+            },
+          },
+          commande: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              dateCreation: { type: 'string', format: 'date-time' },
+              statut: { type: 'string' },
+              typeCommande: { type: 'string' },
+              montantTotal: { type: 'number' },
+              acheteur: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  devise: { type: 'string' },
+                  user: { type: 'object', properties: { nom: { type: 'string', nullable: true }, telephone: { type: 'string' }, email: { type: 'string', nullable: true } } },
+                },
+              },
+              livraison: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  statut: { type: 'string' },
+                  dateReceptionConfirmee: { type: 'string', format: 'date-time', nullable: true },
+                },
+              },
+            },
+          },
+        },
+      },
+      AdminPaymentDetailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          paiement: { $ref: '#/components/schemas/AdminPaymentDetail' },
+        },
+        required: ['success', 'paiement'],
+      },
+
+      // =========================================================================
+      // ADMIN REVERSEMENTS INDIVIDUELS
+      // =========================================================================
+      AdminPayoutListItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          statut: { type: 'string', enum: ['EN_ATTENTE', 'EN_TRAITEMENT', 'VERSE', 'ECHOUE', 'RECONCILIATION_REQUISE'] },
+          statutExterne: { type: 'string', nullable: true },
+          methode: { type: 'string' },
+          modeExterne: { type: 'string', nullable: true },
+          montantBrut: { type: 'number' },
+          commission: { type: 'number' },
+          montantNet: { type: 'number' },
+          devise: { type: 'string' },
+          prestataire: { type: 'string', nullable: true },
+          referenceExterne: { type: 'string', nullable: true },
+          dateCreation: { type: 'string', format: 'date-time', nullable: true },
+          dateDeclenchement: { type: 'string', format: 'date-time', nullable: true },
+          dateConfirmation: { type: 'string', format: 'date-time', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          tentatives: { type: 'integer' },
+          artisan: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              nomAtelier: { type: 'string' },
+              nom: { type: 'string' },
+            },
+          },
+          commandeArtisan: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              statut: { type: 'string' },
+              commandeId: { type: 'string', format: 'uuid' },
+            },
+          },
+          commande: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              statut: { type: 'string' },
+              dateCreation: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+      },
+      AdminPayoutListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          reversements: { type: 'array', items: { $ref: '#/components/schemas/AdminPayoutListItem' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
+        },
+        required: ['success', 'reversements', 'total', 'page', 'limit', 'totalPages'],
+      },
+      AdminPayoutEligibleItem: {
+        type: 'object',
+        properties: {
+          commandeArtisanId: { type: 'string', format: 'uuid' },
+          commandeId: { type: 'string', format: 'uuid' },
+          artisan: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              nomAtelier: { type: 'string' },
+              nom: { type: 'string' },
+            },
+          },
+          devise: { type: 'string' },
+          montantBrut: { type: 'number' },
+          commission: { type: 'number' },
+          montantNet: { type: 'number' },
+          dateReceptionConfirmee: { type: 'string', format: 'date-time', nullable: true },
+          dateEcheance: { type: 'string', format: 'date-time', nullable: true },
+          delaiExpire: { type: 'boolean' },
+          eligible: { type: 'boolean' },
+          raisons: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      AdminPayoutEligibleListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          commandesArtisans: { type: 'array', items: { $ref: '#/components/schemas/AdminPayoutEligibleItem' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
+        },
+        required: ['success', 'commandesArtisans', 'total', 'page', 'limit', 'totalPages'],
+      },
+      AdminPayoutDetail: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          statut: { type: 'string', enum: ['EN_ATTENTE', 'EN_TRAITEMENT', 'VERSE', 'ECHOUE', 'RECONCILIATION_REQUISE'] },
+          statutExterne: { type: 'string', nullable: true },
+          methode: { type: 'string' },
+          modeExterne: { type: 'string', nullable: true },
+          montantBrut: { type: 'number' },
+          commission: { type: 'number' },
+          montantNet: { type: 'number' },
+          devise: { type: 'string' },
+          prestataire: { type: 'string', nullable: true },
+          referenceExterne: { type: 'string', nullable: true },
+          dateCreation: { type: 'string', format: 'date-time', nullable: true },
+          dateDeclenchement: { type: 'string', format: 'date-time', nullable: true },
+          dateConfirmation: { type: 'string', format: 'date-time', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          erreur: { type: 'object', nullable: true, additionalProperties: true },
+          destinationMasquee: { type: 'object', nullable: true, properties: { masquee: { type: 'string' } } },
+          artisan: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              nomAtelier: { type: 'string' },
+              nom: { type: 'string' },
+            },
+          },
+          commandeArtisan: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              statut: { type: 'string' },
+              sousTotal: { type: 'number' },
+              commission: { type: 'number' },
+              fraisLivraison: { type: 'number' },
+              montantTotal: { type: 'number' },
+            },
+          },
+          commande: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              statut: { type: 'string' },
+              dateCreation: { type: 'string', format: 'date-time' },
+              montantTotal: { type: 'number' },
+              paiement: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  statut: { type: 'string' },
+                  reconciliationRequise: { type: 'boolean' },
+                  devise: { type: 'string' },
+                },
+              },
+              livraison: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  statut: { type: 'string' },
+                  dateReceptionConfirmee: { type: 'string', format: 'date-time', nullable: true },
+                },
+              },
+            },
+          },
+          tentatives: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                prestataire: { type: 'string' },
+                referenceExterne: { type: 'string', nullable: true },
+                statut: { type: 'string' },
+                statutExterne: { type: 'string', nullable: true },
+                montant: { type: 'number' },
+                devise: { type: 'string' },
+                modeExterne: { type: 'string', nullable: true },
+                dateCreation: { type: 'string', format: 'date-time' },
+                dateEnvoi: { type: 'string', format: 'date-time', nullable: true },
+                dateReussite: { type: 'string', format: 'date-time', nullable: true },
+                erreur: { type: 'object', nullable: true, additionalProperties: true },
+              },
+            },
+          },
+        },
+      },
+      AdminPayoutDetailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          reversement: { $ref: '#/components/schemas/AdminPayoutDetail' },
+        },
+        required: ['success', 'reversement'],
+      },
+      PayoutAutomaticDisabledResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          message: { type: 'string' },
+          code: { type: 'string', example: 'PAYOUTS_AUTOMATIC_DISABLED' },
+        },
+      },
+      PayoutSyncResponse: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          statut: { type: 'string' },
+          statutExterne: { type: 'string', nullable: true },
+        },
+      },
+
+      // =========================================================================
+      // ADMIN REVERSEMENTS GROUPES (BATCH)
+      // =========================================================================
+      AdminPayoutBatchListItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          statut: { type: 'string', enum: ['EN_ATTENTE', 'VERSE', 'ANNULE'] },
+          artisanId: { type: 'string', format: 'uuid' },
+          artisan: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              nomAtelier: { type: 'string' },
+              nom: { type: 'string' },
+            },
+          },
+          devise: { type: 'string' },
+          montantTotal: { type: 'number' },
+          preparedBy: { type: 'string', format: 'uuid', nullable: true },
+          confirmedBy: { type: 'string', format: 'uuid', nullable: true },
+          datePreparation: { type: 'string', format: 'date-time', nullable: true },
+          dateConfirmation: { type: 'string', format: 'date-time', nullable: true },
+          dateAnnulation: { type: 'string', format: 'date-time', nullable: true },
+          moyenPaiement: { type: 'string', nullable: true },
+          referenceTransfert: { type: 'string', nullable: true },
+          lignesCount: { type: 'integer' },
+          note: { type: 'string', nullable: true },
+          motifAnnulation: { type: 'string', nullable: true },
+        },
+      },
+      AdminPayoutBatchListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          batches: { type: 'array', items: { $ref: '#/components/schemas/AdminPayoutBatchListItem' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
+        },
+        required: ['success', 'batches', 'total', 'page', 'limit', 'totalPages'],
+      },
+      AdminPayoutBatchDetail: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          statut: { type: 'string', enum: ['EN_ATTENTE', 'VERSE', 'ANNULE'] },
+          artisanId: { type: 'string', format: 'uuid' },
+          artisan: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              nomAtelier: { type: 'string' },
+              nom: { type: 'string' },
+            },
+          },
+          devise: { type: 'string' },
+          montantTotal: { type: 'number' },
+          preparedBy: { type: 'string', format: 'uuid', nullable: true },
+          confirmedBy: { type: 'string', format: 'uuid', nullable: true },
+          datePreparation: { type: 'string', format: 'date-time', nullable: true },
+          dateConfirmation: { type: 'string', format: 'date-time', nullable: true },
+          dateAnnulation: { type: 'string', format: 'date-time', nullable: true },
+          moyenPaiement: { type: 'string', nullable: true },
+          referenceTransfert: { type: 'string', nullable: true },
+          note: { type: 'string', nullable: true },
+          motifAnnulation: { type: 'string', nullable: true },
+          lignes: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                montantBrut: { type: 'number' },
+                commission: { type: 'number' },
+                montantNet: { type: 'number' },
+                commandeArtisan: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', format: 'uuid' },
+                    statut: { type: 'string' },
+                    sousTotal: { type: 'number' },
+                    commission: { type: 'number' },
+                    fraisLivraison: { type: 'number' },
+                    montantTotal: { type: 'number' },
+                    commandeId: { type: 'string', format: 'uuid' },
+                    commande: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', format: 'uuid' },
+                        statut: { type: 'string' },
+                        dateCreation: { type: 'string', format: 'date-time' },
+                        montantTotal: { type: 'number' },
+                        paiement: {
+                          type: 'object',
+                          nullable: true,
+                          properties: {
+                            statut: { type: 'string' },
+                            reconciliationRequise: { type: 'boolean' },
+                            devise: { type: 'string' },
+                          },
+                        },
+                        livraison: {
+                          type: 'object',
+                          nullable: true,
+                          properties: {
+                            statut: { type: 'string' },
+                            dateReceptionConfirmee: { type: 'string', format: 'date-time', nullable: true },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          annulations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                motif: { type: 'string' },
+                dateAnnulation: { type: 'string', format: 'date-time' },
+                annulledBy: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', format: 'uuid' },
+                    user: { type: 'object', properties: { nom: { type: 'string' }, email: { type: 'string' } } },
+                    niveauAcces: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      AdminPayoutBatchDetailResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          batch: { $ref: '#/components/schemas/AdminPayoutBatchDetail' },
+        },
+        required: ['success', 'batch'],
+      },
+      AdminPayoutBatchEligibleArtisan: {
+        type: 'object',
+        properties: {
+          artisan: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              nomAtelier: { type: 'string' },
+              nom: { type: 'string' },
+            },
+          },
+          commandes: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                commandeArtisanId: { type: 'string', format: 'uuid' },
+                commandeId: { type: 'string', format: 'uuid' },
+                statut: { type: 'string' },
+                devise: { type: 'string' },
+                montantBrut: { type: 'number' },
+                commission: { type: 'number' },
+                montantNet: { type: 'number' },
+                fraisLivraison: { type: 'number' },
+                montantTotal: { type: 'number' },
+                dateReceptionConfirmee: { type: 'string', format: 'date-time', nullable: true },
+                dateEcheance: { type: 'string', format: 'date-time', nullable: true },
+                delaiExpire: { type: 'boolean' },
+                eligible: { type: 'boolean' },
+                raisons: { type: 'array', items: { type: 'string' } },
+              },
+            },
+          },
+          montantNetTotal: { type: 'number' },
+        },
+      },
+      AdminPayoutBatchEligibleResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          artisans: { type: 'array', items: { $ref: '#/components/schemas/AdminPayoutBatchEligibleArtisan' } },
+          total: { type: 'integer' },
+          page: { type: 'integer' },
+          limit: { type: 'integer' },
+          totalPages: { type: 'integer' },
+        },
+        required: ['success', 'artisans', 'total', 'page', 'limit', 'totalPages'],
+      },
+      PayoutBatchPrepareRequest: {
+        type: 'object',
+        properties: {
+          artisanId: { type: 'string', format: 'uuid' },
+          commandeArtisanIds: { type: 'array', items: { type: 'string', format: 'uuid' }, minItems: 1 },
+        },
+        required: ['artisanId', 'commandeArtisanIds'],
+      },
+      PayoutBatchPrepareResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          id: { type: 'string', format: 'uuid' },
+        },
+        required: ['success', 'id'],
+      },
+      PayoutBatchConfirmRequest: {
+        type: 'object',
+        properties: {
+          moyenPaiement: { type: 'string', enum: ['MOBILE_MONEY', 'VIREMENT_BANCAIRE'] },
+          referenceTransfert: { type: 'string', maxLength: 255 },
+          dateConfirmation: { type: 'string', format: 'date-time', nullable: true },
+          note: { type: 'string', maxLength: 1000, nullable: true },
+        },
+        required: ['moyenPaiement', 'referenceTransfert'],
+      },
+      PayoutBatchConfirmResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          id: { type: 'string', format: 'uuid' },
+          statut: { type: 'string' },
+        },
+        required: ['success', 'id', 'statut'],
+      },
+      PayoutBatchCancelRequest: {
+        type: 'object',
+        properties: {
+          motifAnnulation: { type: 'string', minLength: 1, maxLength: 500 },
+        },
+        required: ['motifAnnulation'],
+      },
+      PayoutBatchCancelResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          id: { type: 'string', format: 'uuid' },
+        },
+        required: ['success', 'id'],
+      },
+
+      // =========================================================================
+      // ARTISAN PROFIL
+      // =========================================================================
+      ArtisanProfileFull: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          nomAtelier: { type: 'string', nullable: true },
+          specialite: { type: 'string', nullable: true },
+          anneeCreation: { type: 'integer', nullable: true },
+          ville: { type: 'string', nullable: true },
+          pays: { type: 'string', nullable: true },
+          bioCourte: { type: 'string', nullable: true },
+          histoire: { type: 'string', nullable: true },
+          siteWeb: { type: 'string', nullable: true },
+          liensReseauxSociaux: { type: 'object', nullable: true, additionalProperties: { type: 'string' } },
+          devise: { type: 'string', enum: ['XOF', 'EUR', 'USD'] },
+          langue: { type: 'string', enum: ['fr', 'en'] },
+          preparationMinDays: { type: 'integer' },
+          preparationMaxDays: { type: 'integer' },
+          photoProfilUrl: { type: 'string', nullable: true },
+          photoProfilMimeType: { type: 'string', nullable: true },
+          photoProfilSize: { type: 'integer', nullable: true },
+          photoBanniereUrl: { type: 'string', nullable: true },
+          photoBanniereMimeType: { type: 'string', nullable: true },
+          photoBanniereSize: { type: 'integer', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          user: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              email: { type: 'string', nullable: true },
+              nom: { type: 'string', nullable: true },
+              telephone: { type: 'string' },
+            },
+          },
+          atelierPhotos: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                url: { type: 'string' },
+                mimeType: { type: 'string' },
+                size: { type: 'integer' },
+                position: { type: 'integer' },
+                createdAt: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
+          processusEtapes: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                ordre: { type: 'integer' },
+                legende: { type: 'string' },
+                photoUrl: { type: 'string', nullable: true },
+                photoMimeType: { type: 'string', nullable: true },
+                photoSize: { type: 'integer', nullable: true },
+                createdAt: { type: 'string', format: 'date-time' },
+                updatedAt: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
+          expositions: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                annee: { type: 'integer' },
+                evenement: { type: 'string' },
+                lieu: { type: 'string' },
+                createdAt: { type: 'string', format: 'date-time' },
+                updatedAt: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
+          paiementPreference: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              methode: { type: 'string', enum: ['MOBILE_MONEY', 'VIREMENT_BANCAIRE'] },
+              mobileMoneyOperateur: { type: 'string', nullable: true },
+              mobileMoneyNumero: { type: 'string', nullable: true },
+              virementNomBanque: { type: 'string', nullable: true },
+              virementIban: { type: 'string', nullable: true },
+              virementNomCompte: { type: 'string', nullable: true },
+            },
+          },
+        },
+      },
+      ArtisanProfileFullResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          profil: { $ref: '#/components/schemas/ArtisanProfileFull' },
+        },
+        required: ['success', 'profil'],
+      },
+      ArtisanProfileUpdateRequest: {
+        type: 'object',
+        properties: {
+          nomAtelier: { type: 'string', maxLength: 255 },
+          specialite: { type: 'string', maxLength: 255 },
+          anneeCreation: { type: 'integer', minimum: 1900, maximum: 2100 },
+          ville: { type: 'string', maxLength: 255 },
+          pays: { type: 'string', maxLength: 255 },
+          bioCourte: { type: 'string', maxLength: 500 },
+          histoire: { type: 'string' },
+          siteWeb: { type: 'string', format: 'uri', maxLength: 500 },
+          instagram: { type: 'string', maxLength: 255 },
+          facebook: { type: 'string', maxLength: 255 },
+          whatsapp: { type: 'string', maxLength: 255 },
+          devise: { type: 'string', enum: ['XOF', 'EUR', 'USD'] },
+          langue: { type: 'string', enum: ['fr', 'en'] },
+          preparationMinDays: { type: 'integer', minimum: 0 },
+          preparationMaxDays: { type: 'integer', minimum: 0 },
+        },
+        additionalProperties: false,
+      },
+      ArtisanProfilePhotoUploadResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          photoProfilUrl: { type: 'string' },
+          photoProfilMimeType: { type: 'string' },
+          photoProfilSize: { type: 'integer' },
+        },
+        required: ['success', 'photoProfilUrl', 'photoProfilMimeType', 'photoProfilSize'],
+      },
+      ArtisanProfileBannerUploadResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          photoBanniereUrl: { type: 'string' },
+          photoBanniereMimeType: { type: 'string' },
+          photoBanniereSize: { type: 'integer' },
+        },
+        required: ['success', 'photoBanniereUrl', 'photoBanniereMimeType', 'photoBanniereSize'],
+      },
+      ArtisanAtelierPhotoItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          url: { type: 'string' },
+          mimeType: { type: 'string' },
+          size: { type: 'integer' },
+          position: { type: 'integer' },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      ArtisanAtelierPhotosResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          photos: { type: 'array', items: { $ref: '#/components/schemas/ArtisanAtelierPhotoItem' } },
+        },
+        required: ['success', 'photos'],
+      },
+      ArtisanAtelierPhotoUploadResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          photo: { $ref: '#/components/schemas/ArtisanAtelierPhotoItem' },
+        },
+        required: ['success', 'photo'],
+      },
+      ArtisanReorderPhotosRequest: {
+        type: 'object',
+        properties: {
+          photoIds: { type: 'array', items: { type: 'string', format: 'uuid' }, minItems: 1 },
+        },
+        required: ['photoIds'],
+      },
+      ArtisanProcessusEtapeItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          ordre: { type: 'integer' },
+          legende: { type: 'string' },
+          photoUrl: { type: 'string', nullable: true },
+          photoMimeType: { type: 'string', nullable: true },
+          photoSize: { type: 'integer', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      ArtisanProcessusListResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          etapes: { type: 'array', items: { $ref: '#/components/schemas/ArtisanProcessusEtapeItem' } },
+        },
+        required: ['success', 'etapes'],
+      },
+      ArtisanProcessusCreateRequest: {
+        type: 'object',
+        properties: {
+          ordre: { type: 'integer', minimum: 1 },
+          legende: { type: 'string', minLength: 1, maxLength: 500 },
+        },
+        required: ['ordre', 'legende'],
+      },
+      ArtisanProcessusUpdateRequest: {
+        type: 'object',
+        properties: {
+          legende: { type: 'string', maxLength: 500 },
+        },
+        additionalProperties: false,
+      },
+      ArtisanProcessusEtapeResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          etape: { $ref: '#/components/schemas/ArtisanProcessusEtapeItem' },
+        },
+        required: ['success', 'etape'],
+      },
+      ArtisanProcessusPhotoUploadResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          etape: { $ref: '#/components/schemas/ArtisanProcessusEtapeItem' },
+        },
+        required: ['success', 'etape'],
+      },
+      ArtisanReorderProcessusRequest: {
+        type: 'object',
+        properties: {
+          etapeIds: { type: 'array', items: { type: 'string', format: 'uuid' }, minItems: 1 },
+        },
+        required: ['etapeIds'],
+      },
+      ArtisanExpositionItem: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          annee: { type: 'integer' },
+          evenement: { type: 'string' },
+          lieu: { type: 'string' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      ArtisanExpositionsResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          expositions: { type: 'array', items: { $ref: '#/components/schemas/ArtisanExpositionItem' } },
+        },
+        required: ['success', 'expositions'],
+      },
+      ArtisanExpositionCreateRequest: {
+        type: 'object',
+        properties: {
+          annee: { type: 'integer', minimum: 1900, maximum: 2100 },
+          evenement: { type: 'string', minLength: 1, maxLength: 255 },
+          lieu: { type: 'string', minLength: 1, maxLength: 255 },
+        },
+        required: ['annee', 'evenement', 'lieu'],
+      },
+      ArtisanExpositionUpdateRequest: {
+        type: 'object',
+        properties: {
+          annee: { type: 'integer', minimum: 1900, maximum: 2100 },
+          evenement: { type: 'string', maxLength: 255 },
+          lieu: { type: 'string', maxLength: 255 },
+        },
+        additionalProperties: false,
+      },
+      ArtisanExpositionResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          exposition: { $ref: '#/components/schemas/ArtisanExpositionItem' },
+        },
+        required: ['success', 'exposition'],
+      },
+      ArtisanVersementPreference: {
+        type: 'object',
+        nullable: true,
+        properties: {
+          methode: { type: 'string', enum: ['MOBILE_MONEY', 'VIREMENT_BANCAIRE'] },
+          mobileMoneyOperateur: { type: 'string', nullable: true },
+          mobileMoneyNumero: { type: 'string', nullable: true },
+          virementNomBanque: { type: 'string', nullable: true },
+          virementIban: { type: 'string', nullable: true },
+          virementNomCompte: { type: 'string', nullable: true },
+        },
+      },
+      ArtisanVersementResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          preference: { $ref: '#/components/schemas/ArtisanVersementPreference' },
+        },
+        required: ['success', 'preference'],
+      },
+      ArtisanVersementUpdateRequest: {
+        type: 'object',
+        properties: {
+          methode: { type: 'string', enum: ['MOBILE_MONEY', 'VIREMENT_BANCAIRE'] },
+          mobileMoneyOperateur: { type: 'string', maxLength: 100 },
+          mobileMoneyNumero: { type: 'string', maxLength: 50 },
+          virementNomBanque: { type: 'string', maxLength: 255 },
+          virementIban: { type: 'string', maxLength: 50 },
+          virementNomCompte: { type: 'string', maxLength: 255 },
+        },
+        required: ['methode'],
+        additionalProperties: false,
       },
     },
   },

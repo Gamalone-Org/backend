@@ -45,7 +45,6 @@ const validInput = {
   articles: [{ oeuvreId: OEUVRE_A1, quantite: 1 }],
   adresseLivraison: 'Lomé, Tokoin',
   transporteur: 'DHL',
-  fraisLivraison: 1000,
   methodePaiement: 'MOBILE_MONEY',
 };
 
@@ -255,7 +254,7 @@ describe('CommandeArtisan: global total = sum of subtotals + fees', () => {
         { oeuvreId: OEUVRE_A1, quantite: 1 },
         { oeuvreId: OEUVRE_B1, quantite: 1 },
       ],
-      fraisLivraison: 5000,
+      // fraisLivraison est actuellement 0 par défaut dans le service
     };
 
     await service.createCommande('user-1', input);
@@ -263,19 +262,19 @@ describe('CommandeArtisan: global total = sum of subtotals + fees', () => {
     const call = repository.createCommande.mock.calls[0]![0];
 
     expect(call.sousTotal).toBe(30000);
-    expect(call.montantTotal).toBe(35000);
+    expect(call.montantTotal).toBe(30000);
 
     const sumArtisanMontants = call.commandesArtisans.reduce(
       (sum: number, ca: any) => sum + ca.montantTotal,
       0
     );
-    expect(sumArtisanMontants).toBe(35000);
+    expect(sumArtisanMontants).toBe(30000);
 
     const sumArtisanFrais = call.commandesArtisans.reduce(
       (sum: number, ca: any) => sum + ca.fraisLivraison,
       0
     );
-    expect(sumArtisanFrais).toBe(5000);
+    expect(sumArtisanFrais).toBe(0);
   });
 });
 
@@ -470,7 +469,7 @@ describe('CommandeArtisan: server-side price derivation', () => {
 
     const call = repository.createCommande.mock.calls[0]![0];
     expect(call.lignes[0].prixUnitaire).toBe(50000);
-    expect(call.montantTotal).toBe(50000 + validInput.fraisLivraison);
+    expect(call.montantTotal).toBe(50000);
   });
 });
 

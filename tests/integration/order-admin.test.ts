@@ -101,7 +101,6 @@ const createBody = {
   articles: [{ oeuvreId: OEUVRE_ID, quantite: 2 }],
   adresseLivraison: 'LomÃ©, Tokoin, Rue 12',
   transporteur: 'DHL',
-  fraisLivraison: 1000,
   methodePaiement: 'MOBILE_MONEY',
 };
 

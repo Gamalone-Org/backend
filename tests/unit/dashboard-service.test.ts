@@ -185,6 +185,7 @@ describe('DashboardService.getDashboard', () => {
     const result = await service.getDashboard('30d');
 
     expect(result.orders.byStatus).toEqual({
+      EN_ATTENTE_PAIEMENT: 0,
       COMMANDE: 40,
       PREPARATION: 0,
       EXPEDIEE: 0,

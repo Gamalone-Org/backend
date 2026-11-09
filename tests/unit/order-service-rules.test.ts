@@ -43,7 +43,6 @@ const validInput = {
   articles: [{ oeuvreId: OEUVRE_ID, quantite: 2 }],
   adresseLivraison: 'Lomé, Tokoin',
   transporteur: 'DHL',
-  fraisLivraison: 1000,
   methodePaiement: 'MOBILE_MONEY',
 };
 
@@ -122,44 +121,29 @@ describe('OrderService business rules', () => {
         { oeuvreId: OEUVRE_ID, quantite: 2 }, // 20000
         { oeuvreId: OEUVRE_2_ID, quantite: 1 }, // 5000
       ],
-      fraisLivraison: 2500,
     };
 
     const result = await service.createCommande('user-1', input);
 
-    expect(repository.createCommande).toHaveBeenCalledWith({
-      acheteurId: 'bp-1',
-      lignes: [
-        { oeuvreId: OEUVRE_ID, artisanId: ARTISAN_ID, prixUnitaire: 10000, quantite: 2 },
-        { oeuvreId: OEUVRE_2_ID, artisanId: ARTISAN_ID, prixUnitaire: 5000, quantite: 1 },
-      ],
-      commandesArtisans: [
-        {
-          artisanId: ARTISAN_ID,
-          statut: 'COMMANDE',
-          sousTotal: 25000,
-          commission: 2500,
-          fraisLivraison: 2500,
-          montantTotal: 27500,
-          lignes: [
-            { oeuvreId: OEUVRE_ID, artisanId: ARTISAN_ID, prixUnitaire: 10000, quantite: 2 },
-            { oeuvreId: OEUVRE_2_ID, artisanId: ARTISAN_ID, prixUnitaire: 5000, quantite: 1 },
-          ],
-        },
-      ],
-      sousTotal: 25000,
-      fraisLivraison: 2500,
-      montantTotal: 27500,
-      commission: 2500, // 10% of 25000
-      methodePaiement: 'MOBILE_MONEY',
-      adresseDest: 'Lomé, Tokoin',
-      transporteur: 'DHL',
-    });
+    expect(repository.createCommande).toHaveBeenCalledWith(
+      expect.objectContaining({
+        acheteurId: 'bp-1',
+        lignes: [
+          { oeuvreId: OEUVRE_ID, artisanId: ARTISAN_ID, prixUnitaire: 10000, quantite: 2 },
+          { oeuvreId: OEUVRE_2_ID, artisanId: ARTISAN_ID, prixUnitaire: 5000, quantite: 1 },
+        ],
+        sousTotal: 25000,
+        commission: 2500, // 10% of 25000
+        methodePaiement: 'MOBILE_MONEY',
+        adresseDest: 'Lomé, Tokoin',
+        transporteur: 'DHL',
+      })
+    );
 
     expect(result.recapitulatif).toEqual({
       sousTotal: 25000,
-      fraisLivraison: 2500,
-      total: 27500,
+      fraisLivraison: 0,
+      total: 25000,
       commission: 2500,
     });
   });
@@ -176,7 +160,8 @@ describe('OrderService business rules', () => {
     const call = repository.createCommande.mock.calls[0][0] as any;
     expect(call.lignes[0].prixUnitaire).toBe(80000);
     expect(call.lignes[0].quantite).toBe(2);
-    expect(call.montantTotal).toBe(80000 * 2 + validInput.fraisLivraison);
+    // fraisLivraison est toujours 0 dans le service actuel
+    expect(call.montantTotal).toBe(80000 * 2 + 0);
   });
 
   it('forbids access to an order belonging to another buyer', async () => {

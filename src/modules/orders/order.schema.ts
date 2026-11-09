@@ -17,10 +17,6 @@ const statutsListSchema = z
   .transform((value) => value.split(',').map((part) => part.trim()))
   .pipe(z.array(z.enum(ORDER_STATUSES)).min(1, 'Au moins un statut est requis'));
 
-const fraisLivraisonSchema = z
-  .number()
-  .nonnegative('Les frais de livraison ne peuvent pas être négatifs')
-  .max(999_999_999_999);
 
 const quantiteSchema = z
   .number()
@@ -55,7 +51,6 @@ export const createCommandeSchema = z
       ),
     adresseLivraison: adresseLivraisonSchema,
     transporteur: transporteurSchema,
-    fraisLivraison: fraisLivraisonSchema.default(0),
     methodePaiement: z.enum([
       'CARTE_BANCAIRE',
       'MOBILE_MONEY',
