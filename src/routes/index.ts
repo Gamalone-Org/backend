@@ -33,6 +33,10 @@ import { artisanProfilRouter } from '../modules/artisan-profile/artisan-profile.
 import { adminAdministrateursRouter } from '../modules/admin/administrateurs/index.js';
 import { favoriRouter } from '../modules/favorites/favorites.routes.js';
 import { buyerParametresRouter } from '../modules/buyer-settings/buyer-settings.routes.js';
+import { paymentRouter } from '../modules/payments/payment.routes.js';
+import { adminPaymentRouter } from '../modules/payments/payment.admin.routes.js';
+import { adminPayoutRouter } from '../modules/payouts/payout.admin.routes.js';
+import { adminPayoutBatchRouter } from '../modules/payouts/payout-batch.admin.routes.js';
 
 const router = Router();
 
@@ -89,5 +93,10 @@ router.use('/v1/admin/administrateurs', adminAdministrateursRouter);
 router.use('/v1/favoris', favoriRouter);
 
 router.use('/v1/acheteur/parametres', buyerParametresRouter);
+
+router.use('/v1/paiements', paymentRouter);
+router.use('/v1/admin/paiements', adminPaymentRouter);
+router.use('/v1/admin/reversements', adminPayoutRouter);
+router.use('/v1/admin/reversements-groupes', adminPayoutBatchRouter);
 
 export default router;

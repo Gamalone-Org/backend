@@ -177,6 +177,7 @@ enum MediaType {
 }
 
 enum OrderStatus {
+  EN_ATTENTE_PAIEMENT
   COMMANDE
   PREPARATION
   EXPEDIEE
@@ -197,6 +198,19 @@ enum PaymentMethod {
   MOBILE_MONEY
   VIREMENT
   ESPECES
+}
+
+enum PaymentProvider {
+  FEDAPAY
+  PAYDUNYA
+}
+
+enum PaymentEventTraitementStatus {
+  RECU
+  EN_TRAITEMENT
+  TRAITE
+  IGNORE
+  ECHOUE
 }
 
 enum PaymentStatus {
@@ -230,6 +244,14 @@ enum ArtisanLangue {
 enum ArtisanPaiementMethode {
   MOBILE_MONEY
   VIREMENT_BANCAIRE
+}
+
+enum PayoutStatus {
+  EN_ATTENTE
+  EN_TRAITEMENT
+  VERSE
+  ECHOUE
+  RECONCILIATION_REQUISE
 }
 
 // ---------------------------------------------------------------------------
@@ -327,6 +349,8 @@ model ArtisanProfile {
   expositions      Exposition[]
   boutiqueSetting  BoutiqueSetting?
   paiementPreference ArtisanPaymentPreference?
+  payouts          Payout[]
+  payoutBatches    PayoutBatch[]
 
   @@index([validatedByAdminId])
   @@map("artisan_profiles")
@@ -350,6 +374,9 @@ model AdminProfile {
   permissions       AdminProfilePermission[]
   auditLogsAsActor  AdminAuditLog[]     @relation("AdminAuditActor")
   auditLogsAsTarget AdminAuditLog[]     @relation("AdminAuditTarget")
+  preparedPayoutBatches   PayoutBatch[] @relation("PayoutBatchPreparedBy")
+  confirmedPayoutBatches  PayoutBatch[] @relation("PayoutBatchConfirmedBy")
+  annulledPayoutBatches   PayoutBatchAnnulation[]
 
   @@map("admin_profiles")
 }
@@ -404,6 +431,7 @@ model BuyerProfile {
   devise             String    @default("XOF")
   langue             String    @default("fr")
   typeClient         BuyerType @default(PARTICULIER)
+  fedaPayCustomerId  String?   @unique
 
   // --- Paramètres acheteur : préférences de notification (opt-in) ---
   // Aucun envoi déclenché ici : ces colonnes indiquent uniquement les canaux
@@ -779,6 +807,7 @@ model Commande {
   livraison          Livraison?
   avis               Avis?
   litiges            Litige[]
+  payouts            Payout[]
 
   @@index([acheteurId])
   @@index([statut])
@@ -825,6 +854,8 @@ model CommandeArtisan {
   commande       Commande         @relation(fields: [commandeId], references: [id], onDelete: Cascade)
   artisan        ArtisanProfile   @relation(fields: [artisanId], references: [id], onDelete: Restrict)
   lignesCommande LigneCommande[]
+  payout         Payout?
+  payoutBatchLines PayoutBatchLine[]
 
   @@unique([commandeId, artisanId])
   @@index([commandeId])
@@ -834,27 +865,88 @@ model CommandeArtisan {
 }
 
 model Paiement {
-  id             String        @id @default(uuid()) @db.Uuid
-  montant        Decimal       @db.Decimal(12, 0)
-  methode        PaymentMethod
-  statut         PaymentStatus @default(EN_ATTENTE)
-  date           DateTime      @default(now())
-  estEnsequestre Boolean       @default(false)
-  commandeId     String        @unique @db.Uuid
+  id                 String          @id @default(uuid()) @db.Uuid
+  montant            Decimal         @db.Decimal(12, 0)
+  methode            PaymentMethod
+  statut             PaymentStatus   @default(EN_ATTENTE)
+  date               DateTime        @default(now())
+  estEnsequestre     Boolean         @default(false)
+  commandeId         String          @unique @db.Uuid
+  prestataire        PaymentProvider?
+  referenceExterne   String?         @unique
+  statutExterne      String?
+  urlPaiement        String?
+  devise             String          @default("XOF")
+  dateInitialisation DateTime?
+  dateExpiration     DateTime?
+  dateConfirmation   DateTime?
+  datePaiementEffectif DateTime?
+  reconciliationRequise Boolean      @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
-  commande Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  commande           Commande        @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  tentatives         PaiementTentative[]
+  evenements         PaiementEvenement[]
 
   @@map("paiements")
 }
 
+model PaiementTentative {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  paiementId         String                   @db.Uuid
+  prestataire        PaymentProvider
+  referenceExterne   String?                  @unique
+  statut             PaymentStatus            @default(EN_ATTENTE)
+  statutExterne      String?
+  montant            Decimal                  @db.Decimal(12, 0)
+  devise             String                   @default("XOF")
+  deviseExterneId    Int?
+  urlPaiement        String?
+  dateCreation       DateTime                 @default(now())
+  dateExpiration     DateTime?
+  dateReussite       DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  paiement           Paiement                 @relation(fields: [paiementId], references: [id], onDelete: Cascade)
+
+  @@index([paiementId])
+  @@index([statut])
+  @@map("paiement_tentatives")
+}
+
+model PaiementEvenement {
+  id                 String                         @id @default(uuid()) @db.Uuid
+  prestataire        PaymentProvider
+  referenceEvenement String?                        @unique
+  typeEvenement      String
+  referenceTransaction String?
+  statutTraitement   PaymentEventTraitementStatus   @default(RECU)
+  dateReception      DateTime                       @default(now())
+  dateTraitement     DateTime?
+  erreur             Json?         @db.JsonB
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+  paiementId         String?                        @db.Uuid
+
+  paiement           Paiement?                      @relation(fields: [paiementId], references: [id], onDelete: SetNull)
+
+  @@index([referenceTransaction])
+  @@index([statutTraitement])
+  @@index([dateReception])
+  @@map("paiement_evenements")
+}
+
 model Livraison {
-  id           String         @id @default(uuid()) @db.Uuid
-  transporteur String
-  numeroSuivi  String?
-  statut       DeliveryStatus @default(EN_ATTENTE)
-  adresseDest  String
-  frais        Decimal        @default(0) @db.Decimal(12, 0)
-  commandeId   String         @unique @db.Uuid
+  id                    String         @id @default(uuid()) @db.Uuid
+  transporteur          String
+  numeroSuivi           String?
+  statut                DeliveryStatus @default(EN_ATTENTE)
+  adresseDest           String
+  frais                 Decimal        @default(0) @db.Decimal(12, 0)
+  commandeId            String         @unique @db.Uuid
+  dateReceptionConfirmee DateTime?
 
   commande Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
 
@@ -906,6 +998,144 @@ model Litige {
   @@index([artisanId])
   @@index([statut])
   @@map("litiges")
+}
+
+// ---------------------------------------------------------------------------
+// Reversements artisans (payouts)
+// ---------------------------------------------------------------------------
+
+model Payout {
+  id                 String        @id @default(uuid()) @db.Uuid
+  commandeArtisanId  String        @unique @db.Uuid
+  artisanId          String        @db.Uuid
+  commandeId         String        @db.Uuid
+  montantBrut        Decimal       @db.Decimal(12, 0)
+  commission         Decimal       @default(0) @db.Decimal(12, 0)
+  montantNet         Decimal       @db.Decimal(12, 0)
+  devise             String        @default("XOF")
+  methode            ArtisanPaiementMethode
+  prestataire        PaymentProvider?
+  statut             PayoutStatus  @default(EN_ATTENTE)
+  referenceExterne   String?       @unique
+  statutExterne      String?
+  modeExterne        String?
+  dateCreation       DateTime      @default(now())
+  dateDeclenchement  DateTime?
+  dateConfirmation   DateTime?
+  erreur             Json?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  commandeArtisan    CommandeArtisan @relation(fields: [commandeArtisanId], references: [id], onDelete: Cascade)
+  artisan            ArtisanProfile  @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+  commande           Commande        @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  tentatives         PayoutTentative[]
+
+  @@map("payouts")
+}
+
+model PayoutTentative {
+  id                 String        @id @default(uuid()) @db.Uuid
+  payoutId           String        @db.Uuid
+  prestataire        PaymentProvider
+  referenceExterne   String?       @unique
+  statut             PayoutStatus  @default(EN_TRAITEMENT)
+  statutExterne      String?
+  montant            Decimal       @db.Decimal(12, 0)
+  devise             String        @default("XOF")
+  modeExterne        String?
+  dateCreation       DateTime      @default(now())
+  dateEnvoi          DateTime?
+  dateReussite       DateTime?
+  erreur             Json?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  payout             Payout        @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+
+  @@index([payoutId])
+  @@index([statut])
+  @@map("payout_tentatives")
+}
+
+enum PayoutBatchStatus {
+  EN_ATTENTE
+  VERSE
+  ANNULE
+}
+
+enum PayoutManualMethod {
+  MOBILE_MONEY
+  VIREMENT_BANCAIRE
+}
+
+// ---------------------------------------------------------------------------
+// Reversements artisans (payouts) — Lots groupés manuels
+// ---------------------------------------------------------------------------
+
+model PayoutBatch {
+  id                 String                @id @default(uuid()) @db.Uuid
+  artisanId          String                @db.Uuid
+  devise             String                @default("XOF")
+  montantTotal       Decimal               @db.Decimal(12, 0)
+  statut             PayoutBatchStatus     @default(EN_ATTENTE)
+  preparedById       String                @db.Uuid
+  confirmedById      String?               @db.Uuid
+  datePreparation    DateTime              @default(now())
+  dateConfirmation   DateTime?
+  dateAnnulation     DateTime?
+  moyenPaiement      PayoutManualMethod?
+  referenceTransfert String?
+  note               String?               @db.Text
+  motifAnnulation    String?               @db.Text
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  artisan            ArtisanProfile        @relation(fields: [artisanId], references: [id], onDelete: Restrict)
+  preparedBy         AdminProfile          @relation("PayoutBatchPreparedBy", fields: [preparedById], references: [id], onDelete: Restrict)
+  confirmedBy        AdminProfile?         @relation("PayoutBatchConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+  lignes             PayoutBatchLine[]
+  annulations        PayoutBatchAnnulation[]
+
+  @@index([artisanId, statut, datePreparation])
+  @@index([preparedById])
+  @@index([confirmedById])
+  @@map("payout_batches")
+}
+
+model PayoutBatchLine {
+  id                   String          @id @default(uuid()) @db.Uuid
+  payoutBatchId        String          @db.Uuid
+  commandeArtisanId    String          @db.Uuid
+  activeReservationKey String?         @unique @db.Uuid
+  montantBrut          Decimal         @db.Decimal(12, 0)
+  commission           Decimal         @db.Decimal(12, 0)
+  montantNet           Decimal         @db.Decimal(12, 0)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  payoutBatch          PayoutBatch     @relation(fields: [payoutBatchId], references: [id], onDelete: Cascade)
+  commandeArtisan      CommandeArtisan @relation(fields: [commandeArtisanId], references: [id], onDelete: Restrict)
+
+  @@index([payoutBatchId])
+  @@index([commandeArtisanId])
+  @@index([activeReservationKey])
+  @@map("payout_batch_lines")
+}
+
+model PayoutBatchAnnulation {
+  id                 String        @id @default(uuid()) @db.Uuid
+  payoutBatchId      String        @db.Uuid
+  annulledById       String        @db.Uuid
+  motif              String        @db.Text
+  dateAnnulation     DateTime      @default(now())
+
+  payoutBatch        PayoutBatch   @relation(fields: [payoutBatchId], references: [id], onDelete: Cascade)
+  annulledBy         AdminProfile  @relation(fields: [annulledById], references: [id], onDelete: Restrict)
+
+  @@index([payoutBatchId])
+  @@index([annulledById])
+  @@map("payout_batch_annulations")
 }
 
 // ---------------------------------------------------------------------------

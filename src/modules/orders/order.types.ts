@@ -164,7 +164,7 @@ export const acheteurCommandeListSelect = {
     },
   },
   paiement: {
-    select: { id: true, statut: true, methode: true, montant: true },
+    select: { id: true, statut: true, methode: true, montant: true, statutExterne: true },
   },
   livraison: {
     select: { id: true, statut: true, transporteur: true, numeroSuivi: true },

@@ -25,6 +25,7 @@ const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{
 // Rang de chaque statut pour le calcul du statut global d'une commande :
 // le statut global est le statut minimum parmi les CommandeArtisan actives.
 export const COMMANDE_STATUS_RANK: Record<OrderStatus, number> = {
+  EN_ATTENTE_PAIEMENT: -1,
   COMMANDE: 0,
   PREPARATION: 1,
   EXPEDIEE: 2,
@@ -38,6 +39,7 @@ export const COMMANDE_STATUS_RANK: Record<OrderStatus, number> = {
 // Les statuts de clôture administrative ANNULEE / REMBOURSEE n'y figurent pas :
 // ils ne modifient pas l'expédition physique (décision métier P18 à trancher).
 const ORDER_TO_LIVRAISON: Partial<Record<OrderStatus, DeliveryStatus>> = {
+  EN_ATTENTE_PAIEMENT: 'EN_ATTENTE',
   COMMANDE: 'EN_ATTENTE',
   PREPARATION: 'PREPAREE',
   EXPEDIEE: 'EXPEDIEE',
@@ -947,5 +949,27 @@ export class OrderRepository {
 
       return { commandeArtisanId: id, statutGlobal };
     });
+  }
+
+  async findCommandeForReception(commandeId: string, acheteurId: string) {
+    return this.prisma.commande.findFirst({
+      where: { id: commandeId, acheteurId },
+      select: {
+        id: true,
+        statut: true,
+        paiement: { select: { statut: true } },
+        livraison: {
+          select: { id: true, statut: true, dateReceptionConfirmee: true },
+        },
+      },
+    });
+  }
+
+  async confirmReception(livraisonId: string, date: Date): Promise<boolean> {
+    const result = await this.prisma.livraison.updateMany({
+      where: { id: livraisonId, dateReceptionConfirmee: null },
+      data: { dateReceptionConfirmee: date },
+    });
+    return result.count > 0;
   }
 }

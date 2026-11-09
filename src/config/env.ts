@@ -55,6 +55,15 @@ const EnvSchema = z
     OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().nonnegative().default(30),
     OTP_RATE_LIMIT_PER_PHONE: z.coerce.number().int().positive().default(5),
     OTP_RATE_LIMIT_PER_IP: z.coerce.number().int().positive().default(20),
+    // --- PayDunya (Unique prestataire actif) ---
+    PAYDUNYA_MODE: z.enum(['live', 'test']).default('test'),
+    PAYDUNYA_MASTER_KEY: z.string().optional(),
+    PAYDUNYA_PUBLIC_KEY: z.string().optional(),
+    PAYDUNYA_PRIVATE_KEY: z.string().optional(),
+    PAYDUNYA_TOKEN: z.string().optional(),
+    PAYDUNYA_RETURN_URL: z.string().url().optional(),
+    PAYDUNYA_CANCEL_URL: z.string().url().optional(),
+    PAYDUNYA_IPN_URL: z.string().url().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.NODE_ENV !== 'production') {
@@ -171,6 +180,14 @@ function parseEnv(): EnvType {
     OTP_RESEND_COOLDOWN_SECONDS: process.env['OTP_RESEND_COOLDOWN_SECONDS'],
     OTP_RATE_LIMIT_PER_PHONE: process.env['OTP_RATE_LIMIT_PER_PHONE'],
     OTP_RATE_LIMIT_PER_IP: process.env['OTP_RATE_LIMIT_PER_IP'],
+    PAYDUNYA_MODE: process.env['PAYDUNYA_MODE'],
+    PAYDUNYA_MASTER_KEY: process.env['PAYDUNYA_MASTER_KEY'],
+    PAYDUNYA_PUBLIC_KEY: process.env['PAYDUNYA_PUBLIC_KEY'],
+    PAYDUNYA_PRIVATE_KEY: process.env['PAYDUNYA_PRIVATE_KEY'],
+    PAYDUNYA_TOKEN: process.env['PAYDUNYA_TOKEN'],
+    PAYDUNYA_RETURN_URL: process.env['PAYDUNYA_RETURN_URL'],
+    PAYDUNYA_CANCEL_URL: process.env['PAYDUNYA_CANCEL_URL'],
+    PAYDUNYA_IPN_URL: process.env['PAYDUNYA_IPN_URL'],
   };
 
   const result = EnvSchema.safeParse(env);
@@ -188,3 +205,4 @@ function parseEnv(): EnvType {
 }
 
 export const env = parseEnv();
+

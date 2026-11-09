@@ -16,5 +16,6 @@ myCommandeRouter.use(requireAuth, requireRole('ACHETEUR'));
 myCommandeRouter.post('/', controller.create);
 myCommandeRouter.get('/', controller.listMine);
 myCommandeRouter.get('/:id', controller.getMine);
+myCommandeRouter.post('/:id/confirmer-reception', controller.confirmerReception);
 
 export default myCommandeRouter;

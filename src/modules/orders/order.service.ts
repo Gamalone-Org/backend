@@ -1,4 +1,4 @@
-import { OrderStatus, type PaymentMethod } from '../../generated/prisma/client.js';
+import { OrderStatus, type PaymentMethod, type PaymentStatus } from '../../generated/prisma/client.js';
 import { OrderRepository, type CommandeArtisanData } from './order.repository.js';
 import type { AcheteurCommandeFilters } from './order.types.js';
 import {
@@ -7,8 +7,10 @@ import {
   ConflictError,
 } from '../../common/errors/AppError.js';
 import type { CreateCommandeInput } from './order.schema.js';
+import { describePaymentState } from './order.payment-view.js';
 
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  EN_ATTENTE_PAIEMENT: ['COMMANDE'],
   COMMANDE: ['PREPARATION'],
   PREPARATION: ['EXPEDIEE'],
   EXPEDIEE: ['LIVREE'],
@@ -26,6 +28,7 @@ const ANNULEE_ORIGINES: OrderStatus[] = [
 
 // Transitions autorisées pour l'artisan sur SA CommandeArtisan.
 const ARTISAN_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  EN_ATTENTE_PAIEMENT: [],
   COMMANDE: ['PREPARATION'],
   PREPARATION: ['EXPEDIEE'],
   EXPEDIEE: [],
@@ -43,6 +46,8 @@ export class OrderService {
     if (!buyerProfile) {
       throw new ForbiddenError('Profil acheteur introuvable. Impossible de passer commande.');
     }
+
+    const fraisLivraison = 0;
 
     // --- Étape 1 : Valider chaque œuvre et collecter les données par artisan ---
     // Les prix et commissions sont toujours récupérés côté serveur.
@@ -115,7 +120,7 @@ export class OrderService {
       // de livraison avancée sera définie.
       const fraisLivraisonArtisan =
         sousTotalGlobal + sousTotalArtisan > 0
-          ? Math.round((input.fraisLivraison * sousTotalArtisan) / (sousTotalGlobal + sousTotalArtisan))
+          ? Math.round((fraisLivraison * sousTotalArtisan) / (sousTotalGlobal + sousTotalArtisan))
           : 0;
 
       const montantTotalArtisan = sousTotalArtisan + fraisLivraisonArtisan;
@@ -145,7 +150,7 @@ export class OrderService {
       (sum, ca) => sum + ca.fraisLivraison,
       0
     );
-    const ecartFrais = input.fraisLivraison - fraisArtisansTotal;
+    const ecartFrais = fraisLivraison - fraisArtisansTotal;
     if (ecartFrais !== 0 && commandesArtisans.length > 0) {
       // Ajouter l'écart au premier artisan
       const premier = commandesArtisans[0];
@@ -155,7 +160,7 @@ export class OrderService {
       }
     }
 
-    const montantTotal = sousTotalGlobal + input.fraisLivraison;
+    const montantTotal = sousTotalGlobal + fraisLivraison;
 
     // --- Étape 3 : Créer la commande dans une transaction atomique ---
     let commande;
@@ -170,7 +175,7 @@ export class OrderService {
         })),
         commandesArtisans,
         sousTotal: sousTotalGlobal,
-        fraisLivraison: input.fraisLivraison,
+        fraisLivraison: fraisLivraison,
         montantTotal,
         commission: commissionGlobale,
         methodePaiement: input.methodePaiement as PaymentMethod,
@@ -194,7 +199,7 @@ export class OrderService {
       commande: detail,
       recapitulatif: {
         sousTotal: sousTotalGlobal,
-        fraisLivraison: input.fraisLivraison,
+        fraisLivraison: fraisLivraison,
         total: montantTotal,
         commission: commissionGlobale,
       },
@@ -217,7 +222,26 @@ export class OrderService {
       limit,
       filters
     );
-    return { commandes, total, page, limit };
+
+    // Enrichir les commandes avec un état de paiement lisible
+    const enriched = commandes.map((cmd) => {
+      if (cmd.paiement) {
+        return {
+          ...cmd,
+          paiement: {
+            ...cmd.paiement,
+            ...describePaymentState(
+              cmd.paiement.statut as PaymentStatus,
+              cmd.paiement.statutExterne ?? null,
+              cmd.statut
+            ),
+          },
+        };
+      }
+      return cmd;
+    });
+
+    return { commandes: enriched, total, page, limit };
   }
 
   async getMyCommande(userId: string, commandeId: string) {
@@ -432,5 +456,43 @@ export class OrderService {
       .join('\n');
 
     return csv;
+  }
+
+  async confirmerReception(userId: string, commandeId: string): Promise<{ dejaConfirmee: boolean }> {
+    const buyerProfile = await this.repository.findBuyerProfileByUserId(userId);
+    if (!buyerProfile) {
+      throw new ForbiddenError('Profil acheteur introuvable');
+    }
+
+    const commande = await this.repository.findCommandeForReception(commandeId, buyerProfile.id);
+    if (!commande) {
+      throw new NotFoundError('Commande introuvable');
+    }
+
+    // Vérifier que le paiement est confirmé
+    if (commande.paiement?.statut !== 'REUSSI') {
+      throw new ConflictError('Le paiement doit être confirmé avant de valider la réception');
+    }
+
+    // Vérifier que la livraison est effective
+    const livraison = commande.livraison;
+    if (!livraison || livraison.statut !== 'LIVREE') {
+      throw new ConflictError('La commande doit être livrée avant de confirmer la réception');
+    }
+
+    // Si déjà confirmée, idempotent
+    if (livraison.dateReceptionConfirmee) {
+      return { dejaConfirmee: true };
+    }
+
+    const now = new Date();
+    const confirmed = await this.repository.confirmReception(livraison.id, now);
+
+    if (!confirmed) {
+      // Concurrence : un autre processus a déjà confirmé
+      return { dejaConfirmee: true };
+    }
+
+    return { dejaConfirmee: false };
   }
 }
