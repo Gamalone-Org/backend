@@ -119,6 +119,7 @@ enum OtpPurpose {
   SIGNUP
   LOGIN
   PHONE_VERIFICATION
+  PASSWORD_RESET
 }
 
 enum OtpStatus {
@@ -473,19 +474,20 @@ model Favori {
 }
 
 model OtpCode {
-  id           String     @id @default(uuid()) @db.Uuid
-  userId       String?    @db.Uuid
-  phone        String
-  codeHash     String
-  purpose      OtpPurpose
-  status       OtpStatus  @default(EN_ATTENTE)
-  expiresAt    DateTime
-  createdAt    DateTime   @default(now())
-  usedAt       DateTime?
-  attemptCount Int        @default(0)
-  maxAttempts  Int        @default(5)
-  lastSentAt   DateTime?
-  updatedAt    DateTime   @updatedAt
+  id                   String     @id @default(uuid()) @db.Uuid
+  userId               String?    @db.Uuid
+  phone                String
+  codeHash             String
+  purpose              OtpPurpose
+  status               OtpStatus  @default(EN_ATTENTE)
+  expiresAt            DateTime
+  createdAt            DateTime   @default(now())
+  usedAt               DateTime?
+  attemptCount         Int        @default(0)
+  maxAttempts          Int        @default(5)
+  lastSentAt           DateTime?
+  consumedForResetAt   DateTime?
+  updatedAt            DateTime   @updatedAt
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 

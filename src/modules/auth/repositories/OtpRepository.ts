@@ -14,6 +14,7 @@ export type OtpRecord = {
   attemptCount: number;
   maxAttempts: number;
   lastSentAt: Date | null;
+  consumedForResetAt: Date | null;
   updatedAt: Date;
 };
 
@@ -135,5 +136,74 @@ export class OtpRepository {
         },
       },
     });
+  }
+
+  /**
+   * Trouve un OTP PASSWORD_RESET valide (status EN_ATTENTE, non expiré, non consommé)
+   * et le marque atomiquement comme consommé pour la réinitialisation.
+   * Retourne l'OTP s'il a été consommé avec succès, null sinon.
+   */
+  async findAndConsumeResetAuthorization(
+    phone: string,
+    purpose: OtpPurpose
+  ): Promise<OtpRecord | null> {
+    const now = new Date();
+
+    // Transaction pour garantir l'atomicité
+    return this.prisma.$transaction(async (tx) => {
+      const otp = await tx.otpCode.findFirst({
+        where: {
+          phone,
+          purpose,
+          status: 'EN_ATTENTE',
+          expiresAt: {
+            gt: now,
+          },
+          consumedForResetAt: null,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      if (!otp) {
+        return null;
+      }
+
+      // Marquer comme consommé atomiquement
+      const updated = await tx.otpCode.update({
+        where: { id: otp.id },
+        data: {
+          consumedForResetAt: now,
+          status: 'UTILISE',
+          usedAt: now,
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  /**
+   * Invalide tous les OTP actifs de réinitialisation pour un téléphone donné
+   * (utilisé après réinitialisation réussie du mot de passe).
+   */
+  async invalidateResetOtpsByPhone(phone: string): Promise<number> {
+    const result = await this.prisma.otpCode.updateMany({
+      where: {
+        phone,
+        purpose: 'PASSWORD_RESET',
+        status: 'EN_ATTENTE',
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      data: {
+        status: 'EXPIRE',
+        usedAt: new Date(),
+      },
+    });
+
+    return result.count;
   }
 }

@@ -100,6 +100,14 @@ export class PasswordService {
     return timingSafeEqual(candidate, derived);
   }
 
+  /**
+   * Validates a password for hashing (length, non-empty).
+   * Throws if invalid, returns the password if valid.
+   */
+  validatePassword(password: string): string {
+    return this.validateForHash(password);
+  }
+
   private validateForHash(password: string): string {
     if (typeof password !== 'string' || password.length === 0) {
       throw new Error('Password cannot be empty');

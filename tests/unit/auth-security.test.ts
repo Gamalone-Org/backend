@@ -47,6 +47,18 @@ describe('Auth security hardening', () => {
       checkResendCooldown: vi.fn().mockResolvedValue(undefined),
     };
 
+    const otpRepository = {
+      findAndConsumeResetAuthorization: vi.fn().mockResolvedValue(null),
+      invalidateResetOtpsByPhone: vi.fn().mockResolvedValue(0),
+    };
+
+    const prisma = {
+      otpCode: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+    };
+
     const smsService = { sendOtp: vi.fn().mockResolvedValue(undefined), sendNotification: vi.fn() };
 
     const authService = new AuthService(
@@ -57,6 +69,8 @@ describe('Auth security hardening', () => {
       } as any,
       otpService as any,
       new PhoneService(),
+      otpRepository as any,
+      prisma as any,
       smsService as any,
       new JwtService('12345678901234567890123456789012')
     );

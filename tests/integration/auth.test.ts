@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { InvalidOtpError, UnauthorizedError } from '../../src/common/errors/AppError.js';
+import { InvalidOtpError, UnauthorizedError, ResetAuthorizationExpiredError, ResetAuthorizationAlreadyUsedError, ResetAuthorizationInvalidError } from '../../src/common/errors/AppError.js';
 
 const mockRequestOtp = vi.fn(async () => ({
   message: 'OTP sent successfully',
@@ -29,12 +29,28 @@ const mockGetCurrentUser = vi.fn(async () => ({
   telephoneVerificationStatus: 'VERIFIE',
 }));
 
+const mockForgotPassword = vi.fn(async () => ({
+  message: 'If an account with this phone number exists and has a password set, a reset code has been sent.',
+  expiresAt: new Date(Date.now() + 300000),
+}));
+const mockVerifyResetOtp = vi.fn(async () => ({
+  message: 'OTP verified. Reset authorization granted.',
+  resetToken: 'reset_abc123_1234567890_abcdef1234567890',
+  expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+}));
+const mockResetPassword = vi.fn(async () => ({
+  message: 'Password has been reset successfully',
+}));
+
 vi.mock('../../src/modules/auth/services/AuthService.js', () => ({
   AuthService: class {
     requestOtp = mockRequestOtp;
     resendOtp = mockResendOtp;
     verifyOtp = mockVerifyOtp;
     getCurrentUser = mockGetCurrentUser;
+    forgotPassword = mockForgotPassword;
+    verifyResetOtp = mockVerifyResetOtp;
+    resetPassword = mockResetPassword;
   },
 }));
 
@@ -149,5 +165,133 @@ describe('Auth routes', () => {
       .set('Authorization', 'Basic abc123');
 
     expect(response.status).toBe(401);
+  });
+
+  // --- Forgot Password Tests ---
+
+  it('POST /api/v1/auth/forgot-password with valid phone returns 200 and generic message', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/forgot-password')
+      .send({ phone: '+22890123456' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('message');
+    expect(response.body.message).toContain('If an account with this phone number exists');
+    expect(response.body).toHaveProperty('expiresAt');
+    expect(response.body).not.toHaveProperty('otp');
+  });
+
+  it('POST /api/v1/auth/forgot-password with unknown phone returns same generic response', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/forgot-password')
+      .send({ phone: '+22899999999' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('message');
+    expect(response.body.message).toContain('If an account with this phone number exists');
+    expect(response.body).toHaveProperty('expiresAt');
+  });
+
+  it('POST /api/v1/auth/forgot-password with countryCode works', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/forgot-password')
+      .send({ countryCode: '+228', phone: '90123456' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('message');
+    expect(response.body).toHaveProperty('expiresAt');
+  });
+
+  // --- Verify Reset OTP Tests ---
+
+  it('POST /api/v1/auth/verify-reset-otp with valid OTP returns 200 with resetToken', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/verify-reset-otp')
+      .send({ phone: '+22890123456', code: '123456' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('message');
+    expect(response.body).toHaveProperty('resetToken');
+    expect(response.body).toHaveProperty('expiresAt');
+    expect(response.body.resetToken).toMatch(/^reset_/);
+  });
+
+  it('POST /api/v1/auth/verify-reset-otp with invalid OTP returns 400', async () => {
+    mockVerifyResetOtp.mockRejectedValueOnce(new InvalidOtpError('OTP code is incorrect'));
+
+    const response = await request(app)
+      .post('/api/v1/auth/verify-reset-otp')
+      .send({ phone: '+22890123456', code: '000000' });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('POST /api/v1/auth/verify-reset-otp with expired OTP returns 401', async () => {
+    mockVerifyResetOtp.mockRejectedValueOnce(new ResetAuthorizationExpiredError('Reset authorization expired'));
+
+    const response = await request(app)
+      .post('/api/v1/auth/verify-reset-otp')
+      .send({ phone: '+22890123456', code: '123456' });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('POST /api/v1/auth/verify-reset-otp with already used OTP returns 409', async () => {
+    mockVerifyResetOtp.mockRejectedValueOnce(new ResetAuthorizationAlreadyUsedError('Reset authorization already used'));
+
+    const response = await request(app)
+      .post('/api/v1/auth/verify-reset-otp')
+      .send({ phone: '+22890123456', code: '123456' });
+
+    expect(response.status).toBe(409);
+  });
+
+  // --- Reset Password Tests ---
+
+  it('POST /api/v1/auth/reset-password with valid token and password returns 200', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/reset-password')
+      .send({ resetToken: 'reset_abc123_1234567890_abcdef1234567890', motDePasse: 'NewS3cretPassword!' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('message', 'Password has been reset successfully');
+  });
+
+  it('POST /api/v1/auth/reset-password with invalid token format returns 400', async () => {
+    mockResetPassword.mockRejectedValueOnce(new ResetAuthorizationInvalidError('Invalid reset token format'));
+
+    const response = await request(app)
+      .post('/api/v1/auth/reset-password')
+      .send({ resetToken: 'invalid-token', motDePasse: 'NewS3cretPassword!' });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('POST /api/v1/auth/reset-password with expired authorization returns 401', async () => {
+    mockResetPassword.mockRejectedValueOnce(new ResetAuthorizationExpiredError('Reset authorization expired'));
+
+    const response = await request(app)
+      .post('/api/v1/auth/reset-password')
+      .send({ resetToken: 'reset_abc123_1234567890_abcdef1234567890', motDePasse: 'NewS3cretPassword!' });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('POST /api/v1/auth/reset-password with already used authorization returns 409', async () => {
+    mockResetPassword.mockRejectedValueOnce(new ResetAuthorizationAlreadyUsedError('Reset authorization already used'));
+
+    const response = await request(app)
+      .post('/api/v1/auth/reset-password')
+      .send({ resetToken: 'reset_abc123_1234567890_abcdef1234567890', motDePasse: 'NewS3cretPassword!' });
+
+    expect(response.status).toBe(409);
+  });
+
+  it('POST /api/v1/auth/reset-password with short password returns 400', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/reset-password')
+      .send({ resetToken: 'reset_abc123_1234567890_abcdef1234567890', motDePasse: 'short' });
+
+    expect(response.status).toBe(400);
   });
 });
