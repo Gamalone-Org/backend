@@ -397,37 +397,14 @@ export class AuthService {
     });
 
     // L'OTP a été marqué UTILISE par verifyOtp.
-    // Nous devons maintenant créer une autorisation de réinitialisation temporaire.
-    // On utilise le même enregistrement OTP (maintenant UTILISE) et on le marque
-    // comme consommé pour la réinitialisation via consumedForResetAt.
-    // L'autorisation (resetToken) est simplement l'ID de l'OTP, signé ou non.
-    // Pour la sécurité, on ne renvoie pas l'ID brut mais un token opaque.
-    // Ici, on utilise l'ID de l'OTP comme base, préfixé pour éviter confusion.
-
-    // Note: L'OTP vient d'être marqué UTILISE, donc findLatestActive ne le trouvera plus.
-    // Il faut chercher le dernier OTP UTILISE pour ce purpose.
-    const lastUsedOtp = await this.prisma.otpCode.findFirst({
-      where: {
-        phone: normalizedPhone,
-        purpose: OtpPurpose.PASSWORD_RESET,
-        status: 'UTILISE',
-        consumedForResetAt: null,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!lastUsedOtp) {
-      throw new ResetAuthorizationInvalidError('Reset authorization not found');
-    }
-
-    // Marquer comme consommé pour la réinitialisation (atomique)
+    // On le consomme maintenant pour la réinitialisation (atomique via transaction).
     const consumed = await this.otpRepository.findAndConsumeResetAuthorization(
       normalizedPhone,
       OtpPurpose.PASSWORD_RESET
     );
 
     if (!consumed) {
-      throw new ResetAuthorizationAlreadyUsedError('Reset authorization already consumed');
+      throw new ResetAuthorizationAlreadyUsedError('Reset authorization already consumed or not found');
     }
 
     // Générer un token de réinitialisation opaque (non-JWT pour éviter confusion)
