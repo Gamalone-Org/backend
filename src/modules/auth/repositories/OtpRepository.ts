@@ -139,7 +139,7 @@ export class OtpRepository {
   }
 
   /**
-   * Trouve un OTP PASSWORD_RESET valide (status EN_ATTENTE, non expiré, non consommé)
+   * Trouve un OTP PASSWORD_RESET qui vient d'être vérifié (status UTILISE, non expiré, non consommé pour reset)
    * et le marque atomiquement comme consommé pour la réinitialisation.
    * Retourne l'OTP s'il a été consommé avec succès, null sinon.
    */
@@ -151,11 +151,13 @@ export class OtpRepository {
 
     // Transaction pour garantir l'atomicité
     return this.prisma.$transaction(async (tx) => {
+      // L'OTP a déjà été marqué UTILISE par verifyOtp.
+      // On cherche le dernier OTP UTILISE pour ce téléphone/purpose qui n'a pas encore été consommé pour reset.
       const otp = await tx.otpCode.findFirst({
         where: {
           phone,
           purpose,
-          status: 'EN_ATTENTE',
+          status: 'UTILISE',
           expiresAt: {
             gt: now,
           },
@@ -170,13 +172,12 @@ export class OtpRepository {
         return null;
       }
 
-      // Marquer comme consommé atomiquement
+      // Marquer comme consommé pour reset atomiquement
       const updated = await tx.otpCode.update({
         where: { id: otp.id },
         data: {
           consumedForResetAt: now,
-          status: 'UTILISE',
-          usedAt: now,
+          // status reste UTILISE, usedAt déjà défini par verifyOtp
         },
       });
 
