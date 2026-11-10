@@ -146,3 +146,24 @@ export class PhoneNotVerifiedError extends AppError {
     Object.setPrototypeOf(this, PhoneNotVerifiedError.prototype);
   }
 }
+
+export class ResetAuthorizationExpiredError extends AppError {
+  constructor(message: string = 'Reset authorization expired') {
+    super(401, message, 'RESET_AUTHORIZATION_EXPIRED');
+    Object.setPrototypeOf(this, ResetAuthorizationExpiredError.prototype);
+  }
+}
+
+export class ResetAuthorizationAlreadyUsedError extends AppError {
+  constructor(message: string = 'Reset authorization already used') {
+    super(409, message, 'RESET_AUTHORIZATION_ALREADY_USED');
+    Object.setPrototypeOf(this, ResetAuthorizationAlreadyUsedError.prototype);
+  }
+}
+
+export class ResetAuthorizationInvalidError extends AppError {
+  constructor(message: string = 'Invalid reset authorization') {
+    super(400, message, 'RESET_AUTHORIZATION_INVALID');
+    Object.setPrototypeOf(this, ResetAuthorizationInvalidError.prototype);
+  }
+}

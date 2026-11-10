@@ -526,6 +526,135 @@ export const swaggerDocument = {
         },
       },
     },
+    '/api/v1/auth/forgot-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Request password reset via SMS OTP',
+        description:
+          'Receives a phone number, normalizes it, and sends a PASSWORD_RESET OTP if an account exists with a password set. Returns a generic response regardless of account existence to prevent user enumeration. Reuses existing OTP rate limiting and cooldown protections.',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AuthForgotPasswordRequest' },
+              examples: {
+                legacy: {
+                  summary: 'Numéro international complet (contrat historique)',
+                  value: { phone: '+22890123456' },
+                },
+                togo: {
+                  summary: 'Togo — indicatif pays + numéro national',
+                  value: { countryCode: '+228', phone: '90123456' },
+                },
+                france: {
+                  summary: 'France — indicatif pays + numéro national',
+                  value: { countryCode: '+33', phone: '612345678' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Password reset request accepted (generic response)',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AuthForgotPasswordResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid phone number or malformed request body' },
+          '429': { description: 'OTP cooldown or rate-limit triggered' },
+          '500': { description: 'Unexpected server error' },
+        },
+      },
+    },
+    '/api/v1/auth/verify-reset-otp': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Verify password reset OTP and obtain reset authorization',
+        description:
+          'Verifies the PASSWORD_RESET OTP. If valid, consumes the OTP atomically and issues a temporary reset authorization token (resetToken) valid for 5 minutes, single-use. The resetToken must be used with /reset-password to complete the process.',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AuthVerifyResetOtpRequest' },
+              examples: {
+                legacy: {
+                  summary: 'Numéro international complet (contrat historique)',
+                  value: { phone: '+22890123456', code: '123456' },
+                },
+                togo: {
+                  summary: 'Togo — indicatif pays + numéro national',
+                  value: { countryCode: '+228', phone: '90123456', code: '123456' },
+                },
+                france: {
+                  summary: 'France — indicatif pays + numéro national',
+                  value: { countryCode: '+33', phone: '612345678', code: '123456' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'OTP verified, reset authorization granted',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AuthVerifyResetOtpResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid phone, malformed code, or invalid OTP format' },
+          '401': { description: 'OTP expired or invalid' },
+          '409': { description: 'OTP already used or reset authorization already consumed' },
+          '423': { description: 'OTP blocked after too many attempts' },
+          '429': { description: 'Too many verification attempts or rate-limited requests' },
+          '500': { description: 'Unexpected server error' },
+        },
+      },
+    },
+    '/api/v1/auth/reset-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Reset password using temporary authorization',
+        description:
+          'Consumes the reset authorization token atomically, validates the new password (8-128 chars), hashes it, updates the user password, invalidates remaining PASSWORD_RESET OTPs for the phone, and invalidates existing sessions if applicable. The resetToken is single-use and expires after 5 minutes.',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AuthResetPasswordRequest' },
+              examples: {
+                reset: {
+                  summary: 'Reset token + new password',
+                  value: { resetToken: 'reset_abc123_1234567890_abcdef1234567890', motDePasse: 'NewS3cretPassword!' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Password reset successfully',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/AuthResetPasswordResponse' },
+              },
+            },
+          },
+          '400': { description: 'Invalid request body, password too short/long, or invalid reset token format' },
+          '401': { description: 'Reset authorization expired' },
+          '409': { description: 'Reset authorization already used' },
+          '422': { description: 'Invalid reset authorization (wrong purpose, not consumed, etc.)' },
+          '500': { description: 'Unexpected server error' },
+        },
+      },
+    },
     '/api/v1/kyc/submit': {
       post: {
         tags: ['KYC'],
@@ -5648,6 +5777,74 @@ export const swaggerDocument = {
           },
         },
         required: ['id', 'telephone', 'role', 'statut', 'telephoneVerificationStatus'],
+      },
+      AuthForgotPasswordRequest: {
+        type: 'object',
+        properties: {
+          countryCode: { $ref: '#/components/schemas/AuthCountryCode' },
+          phone: {
+            type: 'string',
+            description:
+              'National number when `countryCode` is provided, otherwise a full E.164 number. Normalized server-side to E.164.',
+            example: '612345678',
+          },
+        },
+        required: ['phone'],
+      },
+      AuthVerifyResetOtpRequest: {
+        type: 'object',
+        properties: {
+          countryCode: { $ref: '#/components/schemas/AuthCountryCode' },
+          phone: {
+            type: 'string',
+            description:
+              'National number when `countryCode` is provided, otherwise a full E.164 number. Normalized server-side to E.164.',
+            example: '612345678',
+          },
+          code: { type: 'string', example: '123456' },
+        },
+        required: ['phone', 'code'],
+      },
+      AuthResetPasswordRequest: {
+        type: 'object',
+        properties: {
+          resetToken: { type: 'string', description: 'Opaque reset token returned by /verify-reset-otp' },
+          motDePasse: {
+            type: 'string',
+            format: 'password',
+            minLength: 8,
+            maxLength: 128,
+            example: 'NewS3cretPassword!',
+          },
+        },
+        required: ['resetToken', 'motDePasse'],
+      },
+      AuthResetPasswordResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Password has been reset successfully' },
+        },
+        required: ['success', 'message'],
+      },
+      AuthVerifyResetOtpResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'OTP verified. Reset authorization granted.' },
+          resetToken: { type: 'string', example: 'reset_abc123_1234567890_abcdef1234567890' },
+          expiresAt: { type: 'string', format: 'date-time' },
+        },
+        required: ['success', 'message', 'resetToken', 'expiresAt'],
+      },
+      AuthForgotPasswordResponse: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'If an account with this phone number exists and has a password set, a reset code has been sent.' },
+          expiresAt: { type: 'string', format: 'date-time' },
+        },
+        required: ['success', 'message', 'expiresAt'],
       },
       CreateCommandeRequest: {
         type: 'object',

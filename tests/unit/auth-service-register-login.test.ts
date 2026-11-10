@@ -39,6 +39,7 @@ function buildService(
     passwordHash?: unknown;
     compare?: unknown;
     limiter?: unknown;
+    updatePassword?: unknown;
   } = {}
 ) {
   const repository = {
@@ -53,6 +54,7 @@ function buildService(
     isUniqueConstraintError: options.isUniqueConstraintError ?? (() => false),
     createUser: vi.fn().mockResolvedValue(baseUser),
     findById: vi.fn().mockResolvedValue(baseUser),
+    updatePassword: options.updatePassword ?? vi.fn().mockResolvedValue(baseUser),
   };
 
   const otpService = {
@@ -65,12 +67,25 @@ function buildService(
     checkResendCooldown: vi.fn().mockResolvedValue(undefined),
   };
 
+  const otpRepository = {
+    findAndConsumeResetAuthorization: vi.fn().mockResolvedValue(null),
+    invalidateResetOtpsByPhone: vi.fn().mockResolvedValue(0),
+  };
+
+  const prisma = {
+    otpCode: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+  };
+
   const smsService = { sendOtp: vi.fn().mockResolvedValue(undefined) };
   const jwtService = { generateToken: vi.fn().mockReturnValue('jwt.token') };
 
   const passwordService = {
     hash: options.passwordHash ?? vi.fn().mockResolvedValue('hashed-password'),
     compare: options.compare ?? vi.fn().mockResolvedValue(true),
+    validatePassword: vi.fn().mockImplementation((p: string) => p),
   };
 
   const limiter = options.limiter ?? {
@@ -83,13 +98,15 @@ function buildService(
     repository as any,
     otpService as any,
     new PhoneService(),
+    otpRepository as any,
+    prisma as any,
     smsService as any,
     jwtService as any,
     passwordService as any,
     limiter as any
   );
 
-  return { service, repository, otpService, smsService, jwtService, passwordService, limiter };
+  return { service, repository, otpService, otpRepository, prisma, smsService, jwtService, passwordService, limiter };
 }
 
 const acheteurInput = {

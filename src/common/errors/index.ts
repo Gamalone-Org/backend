@@ -15,5 +15,8 @@ export {
   OtpRateLimitedError,
   LoginRateLimitedError,
   PhoneNotVerifiedError,
+  ResetAuthorizationExpiredError,
+  ResetAuthorizationAlreadyUsedError,
+  ResetAuthorizationInvalidError,
 } from './AppError.js';
 export { errorHandler } from './errorHandler.js';

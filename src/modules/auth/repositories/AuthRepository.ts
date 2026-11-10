@@ -163,4 +163,18 @@ export class AuthRepository {
       select: { permission: true },
     });
   }
+
+  /**
+   * Met à jour le mot de passe hashé d'un utilisateur.
+   * Utilisé pour la réinitialisation de mot de passe.
+   */
+  async updatePassword(userId: string, passwordHash: string): Promise<User> {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        motDePasse: passwordHash,
+        updatedAt: new Date(),
+      },
+    });
+  }
 }

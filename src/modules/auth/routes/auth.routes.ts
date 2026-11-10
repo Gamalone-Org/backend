@@ -13,6 +13,7 @@ import { createSmsService } from '../../../config/sms-factory.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { loginSchema, registerSchema, verifyPhoneSchema } from '../schema.js';
 import { otpPhoneFields } from '../services/PhoneService.js';
+import { ResetAuthorizationExpiredError, ResetAuthorizationAlreadyUsedError, ResetAuthorizationInvalidError } from '../../../common/errors/AppError.js';
 
 const router = Router();
 const authRepository = new AuthRepository(prisma);
@@ -24,6 +25,8 @@ const authService = new AuthService(
   authRepository,
   otpService,
   phoneService,
+  otpRepository,
+  prisma,
   createSmsService(),
   jwtService
 );
@@ -186,6 +189,123 @@ router.post('/verify-phone', async (req, res, next) => {
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     if (error instanceof AppError) {
+      next(error);
+      return;
+    }
+
+    if (error instanceof z.ZodError) {
+      next(new ValidationError(error.issues[0]?.message ?? 'Invalid request'));
+      return;
+    }
+
+    next(error);
+  }
+});
+
+const forgotPasswordSchema = z.object({
+  ...otpPhoneFields,
+});
+
+const verifyResetOtpSchema = z.object({
+  ...otpPhoneFields,
+  code: z.string().min(1, 'OTP is required'),
+});
+
+const resetPasswordSchema = z.object({
+  resetToken: z.string().min(1, 'Reset token is required'),
+  motDePasse: z.string().min(8, 'Password must be at least 8 characters').max(128),
+});
+
+/**
+ * ÉTAPE 1 : Demande de réinitialisation de mot de passe
+ * POST /api/v1/auth/forgot-password
+ * Reçoit le numéro de téléphone, normalise, envoie OTP PASSWORD_RESET si compte existe avec mot de passe.
+ * Retourne réponse générique identique pour ne pas révéler l'existence du compte.
+ */
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const parsed = forgotPasswordSchema.parse(req.body);
+    const forwardedFor = Array.isArray(req.headers['x-forwarded-for'])
+      ? req.headers['x-forwarded-for'][0]
+      : req.headers['x-forwarded-for'];
+    const clientIp = req.ip ?? forwardedFor ?? 'unknown';
+    const result = await authService.forgotPassword(
+      resolveRequestPhone(parsed.countryCode, parsed.phone),
+      clientIp
+    );
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    if (error instanceof AppError) {
+      next(error);
+      return;
+    }
+
+    if (error instanceof z.ZodError) {
+      next(new ValidationError(error.issues[0]?.message ?? 'Invalid request'));
+      return;
+    }
+
+    next(error);
+  }
+});
+
+/**
+ * ÉTAPE 2 : Vérification de l'OTP de réinitialisation
+ * POST /api/v1/auth/verify-reset-otp
+ * Reçoit téléphone + code OTP, vérifie OTP PASSWORD_RESET, délivre autorisation temporaire (resetToken) valable 5 min.
+ */
+router.post('/verify-reset-otp', async (req, res, next) => {
+  try {
+    const parsed = verifyResetOtpSchema.parse(req.body);
+    const result = await authService.verifyResetOtp(
+      resolveRequestPhone(parsed.countryCode, parsed.phone),
+      parsed.code
+    );
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    if (error instanceof AppError) {
+      // Map specific reset authorization errors to appropriate HTTP status
+      if (
+        error instanceof ResetAuthorizationExpiredError ||
+        error instanceof ResetAuthorizationAlreadyUsedError ||
+        error instanceof ResetAuthorizationInvalidError
+      ) {
+        next(error);
+        return;
+      }
+      next(error);
+      return;
+    }
+
+    if (error instanceof z.ZodError) {
+      next(new ValidationError(error.issues[0]?.message ?? 'Invalid request'));
+      return;
+    }
+
+    next(error);
+  }
+});
+
+/**
+ * ÉTAPE 3 : Réinitialisation du mot de passe
+ * POST /api/v1/auth/reset-password
+ * Reçoit resetToken + nouveau mot de passe, consomme atomiquement l'autorisation, met à jour le mot de passe.
+ */
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const parsed = resetPasswordSchema.parse(req.body);
+    const result = await authService.resetPassword(parsed.resetToken, parsed.motDePasse);
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    if (error instanceof AppError) {
+      if (
+        error instanceof ResetAuthorizationExpiredError ||
+        error instanceof ResetAuthorizationAlreadyUsedError ||
+        error instanceof ResetAuthorizationInvalidError
+      ) {
+        next(error);
+        return;
+      }
       next(error);
       return;
     }
