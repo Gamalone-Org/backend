@@ -1,27 +1,47 @@
+
+# Dependencies
 node_modules
 npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Git
 .git
 .gitignore
+
+# Environment
 .env
-.env.example
+.env.*
+!.env.example
+
+# Build outputs
 dist
 coverage
-.vscode
-.idea
 .next
 .nuxt
 .turbo
 .cache
+
+# IDE
+.vscode
+.idea
+
+# Documentation
 docs
-tests
-.github
 README.md
 *.md
+
+# Tests
+tests
+
+# Docker files
 Dockerfile
 docker-compose.yml
+
+# Linting and formatting
 .eslintrc.json
 eslint.config.js
 .prettierrc
+
+# TypeScript / Testing configuration
 vitest.config.ts
-tsconfig.json
-package-lock.json
