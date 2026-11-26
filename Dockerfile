@@ -1,48 +1,66 @@
 
 # ==========================================
-# BUILD STAGE
+# BASE
 # ==========================================
-FROM node:22-alpine AS builder
+FROM node:22-alpine AS base
 
 WORKDIR /app
 
 COPY package*.json ./
 COPY prisma ./prisma
 
+
+# ==========================================
+# DEVELOPMENT
+# ==========================================
+FROM base AS development
+
+ENV NODE_ENV=development
+
 RUN npm ci
 
 COPY . .
 
-# Generate Prisma Client and compile TypeScript
+RUN npx prisma generate
+
+EXPOSE 5000
+
+CMD ["npm", "run", "dev"]
+
+
+# ==========================================
+# BUILDER
+# ==========================================
+FROM base AS builder
+
+RUN npm ci
+
+COPY . .
+
+RUN npx prisma generate
+
 RUN npm run build
 
 
 # ==========================================
-# PRODUCTION STAGE
+# PRODUCTION
 # ==========================================
-
 FROM node:22-alpine AS production
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy package files
 COPY package*.json ./
+COPY prisma ./prisma
 
-# Copy Prisma schema
-COPY --from=builder /app/prisma ./prisma
-
-# Install production dependencies
 RUN npm ci --omit=dev
 
-# Copy compiled application
 COPY --from=builder /app/dist ./dist
 
-# Copy generated Prisma Client
+# Prisma 7 custom generated client
 COPY --from=builder /app/src/generated/prisma ./src/generated/prisma
 
-# Create non-root user
 RUN addgroup -S nodejs -g 1001 \
     && adduser -S nodejs -u 1001 \
     && chown -R nodejs:nodejs /app
