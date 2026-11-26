@@ -45,4 +45,3 @@ eslint.config.js
 
 # TypeScript / Testing configuration
 vitest.config.ts
-tsconfig.json
