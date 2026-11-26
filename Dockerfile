@@ -20,21 +20,29 @@ RUN npm run build
 # ==========================================
 # PRODUCTION STAGE
 # ==========================================
+
 FROM node:22-alpine AS production
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Copy package files
 COPY package*.json ./
+
+# Copy Prisma schema
 COPY --from=builder /app/prisma ./prisma
 
+# Install production dependencies
 RUN npm ci --omit=dev
 
+# Copy compiled application
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
+# Copy generated Prisma Client
+COPY --from=builder /app/src/generated/prisma ./src/generated/prisma
+
+# Create non-root user
 RUN addgroup -S nodejs -g 1001 \
     && adduser -S nodejs -u 1001 \
     && chown -R nodejs:nodejs /app
