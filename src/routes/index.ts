@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import authRouter from '../modules/auth/routes/auth.routes.js';
+import geoRouter from '../modules/geo/geo.routes.js';
 import adminKycRouter from '../modules/kyc/kyc.admin.routes.js';
 import kycRouter from '../modules/kyc/kyc.routes.js';
 import kycCronRouter from '../modules/kyc/kyc-cron.routes.js';
@@ -51,6 +52,7 @@ router.get('/v1/health', (_req: Request, res: Response) => {
   });
 });
 
+router.use('/v1/geo', geoRouter);
 router.use('/v1/auth', authRouter);
 router.use('/v1/kyc', kycRouter);
 router.use('/v1/admin/kyc', adminKycRouter);
